@@ -3,10 +3,8 @@ import { authOptions } from "../auth/[...nextauth]/route";
 import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
 
-// Extend global namespace for requestTimes storage
-declare global {
-  var requestTimes: Record<string, number>;
-}
+// Store request timestamps in a module-level variable instead
+const requestTimes: Record<string, number> = {};
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -46,8 +44,7 @@ export async function POST(req: NextRequest) {
     const requestTimeKey = `openai_req_${email}`;
     
     // Check if user has recently made an API request
-    // This would normally use Redis in production
-    const lastRequestTime = global.requestTimes?.[requestTimeKey] || 0;
+    const lastRequestTime = requestTimes[requestTimeKey] || 0;
     const now = Date.now();
     const cooldownPeriod = 2000; // 2 seconds between requests
     
@@ -59,8 +56,7 @@ export async function POST(req: NextRequest) {
     }
     
     // Update request time
-    global.requestTimes = global.requestTimes || {};
-    global.requestTimes[requestTimeKey] = now;
+    requestTimes[requestTimeKey] = now;
 
     // If we already have parsed content and just need the markdown, use it
     if (parsed) {
