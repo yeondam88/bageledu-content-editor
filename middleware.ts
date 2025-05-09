@@ -10,6 +10,7 @@ const BLOCK_DURATION_MS = 60 * 1000; // Block duration in milliseconds (1 minute
 const allowedOrigins = [
   'https://bageledu.com',
   'https://www.bageledu.com',
+  'https://admin.bageledu.com',
   // Add other domains you control
 ];
 
@@ -25,6 +26,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Create a response object that we'll use throughout the middleware
+  const response = NextResponse.next();
+  
   // CORS check - only for API routes
   const origin = request.headers.get('origin');
   if (origin && !allowedOrigins.includes(origin)) {
@@ -38,6 +42,22 @@ export function middleware(request: NextRequest) {
       }
     );
   }
+   
+  // Add CORS headers if origin is allowed
+  if (origin && allowedOrigins.includes(origin)) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+  }
+   
+  // Handle preflight OPTIONS request
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: response.headers,
+    });
+  }
 
   // Get IP from headers or connection
   const ip = request.headers.get('x-forwarded-for') || 
@@ -49,7 +69,9 @@ export function middleware(request: NextRequest) {
   // Initialize or get cache entry for this IP
   if (!requestCache.has(ip)) {
     requestCache.set(ip, { timestamp: [now], blocked: false });
-    return NextResponse.next();
+    // Add security headers before returning
+    addSecurityHeaders(response);
+    return response;
   }
   
   const cacheEntry = requestCache.get(ip)!;
@@ -63,7 +85,9 @@ export function middleware(request: NextRequest) {
       cacheEntry.blocked = false;
       cacheEntry.timestamp = [now];
       requestCache.set(ip, cacheEntry);
-      return NextResponse.next();
+      // Add security headers before returning
+      addSecurityHeaders(response);
+      return response;
     }
     
     // Still blocked
@@ -105,20 +129,25 @@ export function middleware(request: NextRequest) {
   // Update cache
   requestCache.set(ip, cacheEntry);
   
-  // Add security headers
-  const response = NextResponse.next();
+  // Add security headers before returning
+  addSecurityHeaders(response);
   
+  return response;
+}
+
+// Helper function to add security headers
+function addSecurityHeaders(response: NextResponse) {
   // Content Security Policy
   const cspHeader = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Relaxed for development, tighten in production
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' accounts.google.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.digitaloceanspaces.com",
+    "img-src 'self' data: https://*.digitaloceanspaces.com *.googleusercontent.com",
     "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' accounts.google.com",
     "object-src 'none'"
   ].join('; ');
   

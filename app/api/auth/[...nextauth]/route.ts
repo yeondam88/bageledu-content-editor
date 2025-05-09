@@ -9,7 +9,19 @@ export const authOptions = {
     }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
-  // You can add callbacks or session config here if needed
+  callbacks: {
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      // Allow redirects to the original URL, admin domain, or to the base URL
+      if (url.startsWith(baseUrl) || 
+          url.startsWith("https://admin.bageledu.com") || 
+          url.startsWith("https://bageledu.com")) {
+        return url;
+      }
+      return baseUrl;
+    }
+  },
+  // Trust the admin domain
+  trustHost: true,
 };
 
 const handler = NextAuth(authOptions);
