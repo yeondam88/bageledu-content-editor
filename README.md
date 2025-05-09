@@ -34,3 +34,38 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Authentication Setup
+
+1. Create a `.env.local` file in the project root with the following variables:
+
+```
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+NEXTAUTH_SECRET=your-random-secret
+NEXTAUTH_URL=http://localhost:3000
+```
+
+2. Get Google OAuth credentials from https://console.developers.google.com/
+3. Use a strong random string for NEXTAUTH_SECRET (e.g., `openssl rand -base64 32`).
+
+## DigitalOcean Spaces Setup (Image Upload)
+
+Add these to your `.env.local`:
+```
+DO_SPACES_KEY=your-access-key
+DO_SPACES_SECRET=your-secret-key
+DO_SPACES_ENDPOINT=https://your-region.digitaloceanspaces.com
+DO_SPACES_REGION=your-region
+DO_SPACES_BUCKET=your-space-name
+```
+
+## GitHub API Setup (Markdown Commit)
+
+Add these to your `.env.local`:
+```
+GITHUB_TOKEN=your-github-pat
+GITHUB_OWNER=your-github-username-or-org
+GITHUB_REPO=your-repo-name
+GITHUB_BRANCH=main
+```
