@@ -11,11 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { useSession, signIn } from "next-auth/react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AIChatAssistant from "@/app/components/AIChatAssistant";
-
-// Simple toast alternative
-const showAlert = (message: string) => {
-  alert(message);
-};
+import ReactMarkdown from "react-markdown";
+import { imageUrlValidation } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 
 // Main component
 export default function BlogPage() {
@@ -72,6 +72,7 @@ export default function BlogPage() {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [bypassOpenAI, setBypassOpenAI] = useState(false);
+  const [showRawMarkdown, setShowRawMarkdown] = useState(false);
   
   const imageInputRef = useRef<HTMLInputElement>(null);
   const formValues = watch();
@@ -84,6 +85,17 @@ export default function BlogPage() {
       .toLowerCase()
       .replace(/[-\s]+/g, "-");
   }
+
+  // Simple toast alternative
+  const showNotification = (message: string, type: "default" | "success" | "error" = "default") => {
+    if (type === "error") {
+      toast.error(message);
+    } else if (type === "success") {
+      toast.success(message);
+    } else {
+      toast(message);
+    }
+  };
 
   // Fetch existing posts
   const fetchExistingPosts = async () => {
@@ -98,7 +110,7 @@ export default function BlogPage() {
       setExistingPosts(data.posts || []);
     } catch (error: any) {
       console.error("Error fetching posts:", error);
-      showAlert("Failed to load existing posts: " + (error.message || "Unknown error"));
+      showNotification("Failed to load existing posts: " + (error.message || "Unknown error"), "error");
     } finally {
       setPostsLoading(false);
     }
@@ -232,7 +244,7 @@ export default function BlogPage() {
       contentKo: post.contentKo?.substring(0, 100) + "..."
     });
     
-    showAlert("Post loaded for editing. Generate a preview to update the content.");
+    showNotification("Post loaded for editing. Generate a preview to update the content.");
   };
   
   // Use effect to fetch posts on component mount
@@ -251,7 +263,7 @@ export default function BlogPage() {
   // Generate bilingual content preview
   const generatePreview = async () => {
     if (!formValues.title || !formValues.content) {
-      showAlert("Please provide both title and content before generating a preview.");
+      showNotification("Please provide both title and content before generating a preview.", "error");
       return;
     }
     
@@ -301,14 +313,14 @@ export default function BlogPage() {
           if (!uploadRes.ok) {
             const errorText = await uploadRes.text();
             console.error("Blog: Image upload for preview failed:", errorText);
-            showAlert(`Image upload failed: ${errorText}`);
+            showNotification(`Image upload failed: ${errorText}`, "error");
             // Continue without image
           } else {
             const uploadJson = await uploadRes.json();
             console.log("Blog: Preview image uploaded successfully:", uploadJson.url);
             if (!uploadJson.url) {
               console.error("Blog: Missing image URL in response");
-              showAlert("Image uploaded but no URL was returned");
+              showNotification("Image uploaded but no URL was returned", "error");
             } else {
               previewImageUrl = uploadJson.url;
               setImageUrl(previewImageUrl);
@@ -335,7 +347,7 @@ export default function BlogPage() {
           }
         } catch (uploadError: any) {
           console.error("Blog: Upload request error:", uploadError);
-          showAlert(`Image upload error: ${uploadError.message || "Unknown error"}`);
+          showNotification(`Image upload error: ${uploadError.message || "Unknown error"}`, "error");
           // Continue preview generation even if image upload fails
         }
       } else if (previewImageUrl) {
@@ -343,7 +355,7 @@ export default function BlogPage() {
       } else {
         console.log("Blog: No image to upload for preview");
         // Alert user that no image was selected
-        showAlert("No image selected. You will need to upload an image before publishing.");
+        showNotification("No image selected. You will need to upload an image before publishing.", "error");
       }
       
       // Check if we should bypass OpenAI when editing
@@ -515,7 +527,7 @@ ${contentKo}
         });
         
         setRawMarkdown(newMarkdown);
-        showAlert("Content has been updated. Check the preview tab.");
+        showNotification("Content has been updated. Check the preview tab.", "success");
       } else {
         // Generate preview with OpenAI
         console.log("Blog: Generating preview with OpenAI, image URL:", previewImageUrl);
@@ -545,11 +557,11 @@ ${contentKo}
           if (data.markdown) {
             setRawMarkdown(data.markdown);
           }
-          showAlert("Bilingual content has been generated. Check the preview tab.");
+          showNotification("Bilingual content has been generated. Review it in the preview tab before publishing.", "success");
         }
       }
     } catch (error: any) {
-      showAlert(error.message || "Failed to generate preview");
+      showNotification(error.message || "Failed to generate preview", "error");
     } finally {
       setAiLoading(false);
     }
@@ -558,7 +570,7 @@ ${contentKo}
   // Submit the form
   const onSubmit = async (data: any) => {
     if (!preview) {
-      showAlert("Please generate a preview before publishing");
+      showNotification("Please generate a preview before publishing", "error");
       return;
     }
     
@@ -723,10 +735,10 @@ ${contentKo}
       // Refresh the posts list
       fetchExistingPosts();
       
-      showAlert(`Your blog post has been ${editMode ? 'updated' : 'published'}.`);
+      showNotification(`Your blog post has been ${editMode ? 'updated' : 'published'}.`, "success");
     } catch (e: any) {
       setError(e.message || "An error occurred");
-      showAlert(e.message || "Failed to publish your post");
+      showNotification(e.message || "Failed to publish your post", "error");
     } finally {
       setLoading(false);
     }
@@ -745,7 +757,7 @@ ${contentKo}
   // Add a function to handle post deletion
   const handleDeletePost = async (post: any) => {
     if (!post || !post.path) {
-      showAlert("Invalid post selected for deletion");
+      showNotification("Invalid post selected for deletion", "error");
       return;
     }
     
@@ -773,18 +785,57 @@ ${contentKo}
       }
       
       const result = await response.json();
-      showAlert(result.message || "Post deleted successfully");
+      showNotification(result.message || "Post deleted successfully", "success");
       
       // Refresh the posts list
       setSelectedPost(null);
       cancelEdit();
       fetchExistingPosts();
     } catch (error: any) {
-      showAlert(`Error deleting post: ${error.message}`);
+      showNotification(`Error deleting post: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
   };
+
+  // Direct submit without going through the preview step (for when preview already exists)
+  const handleSubmitDirectly = async () => {
+    if (preview) {
+      await handleSubmit(onSubmit)();
+    } else {
+      showNotification("Please generate a preview first before publishing.", "error");
+    }
+  };
+
+  // Easter egg state
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
+  const [easterEggCount, setEasterEggCount] = useState(0);
+  const easterEggTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Easter egg handler
+  const triggerEasterEgg = () => {
+    setShowEasterEgg(true);
+    setEasterEggCount(prev => prev + 1);
+    
+    // Clear any existing timeout
+    if (easterEggTimeout.current) {
+      clearTimeout(easterEggTimeout.current);
+    }
+    
+    // Hide after 5 seconds
+    easterEggTimeout.current = setTimeout(() => {
+      setShowEasterEgg(false);
+    }, 5000);
+  };
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (easterEggTimeout.current) {
+        clearTimeout(easterEggTimeout.current);
+      }
+    };
+  }, []);
 
   if (status === "loading") {
     return (
@@ -820,491 +871,543 @@ ${contentKo}
   }
 
   return (
-    <div className="container mx-auto py-10 px-8 max-w-6xl">
-      <h1 className="text-3xl font-bold mb-8">{editMode ? 'Edit' : 'Create a New'} Blog Post</h1>
+    <div className="container mx-auto py-6 sm:py-10 px-4 sm:px-8 max-w-6xl">
+      {/* Toast component */}
+      <Toaster />
       
-      {/* Post selection dropdown for editing */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row gap-6 items-center bg-white p-8 rounded-lg shadow-sm border border-gray-100">
-          <div className="flex-1 w-full">
-            <Label htmlFor="postSelect" className="text-base font-medium mb-2 block">Select a post to edit</Label>
-            <select 
-              id="postSelect"
-              className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
-              onChange={(e) => {
-                const selectedPost = existingPosts.find(post => post.path === e.target.value);
-                if (selectedPost) {
-                  loadPostData(selectedPost);
-                } else {
-                  cancelEdit();
-                }
-              }}
-              value={selectedPost?.path || ""}
-            >
-              <option value="">-- Create new post --</option>
-              {existingPosts.map(post => (
-                <option key={post.path} value={post.path}>
-                  {post.titleEn || post.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex gap-3 mt-4 md:mt-0 self-end">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={fetchExistingPosts}
-              disabled={postsLoading}
-              className="min-w-[120px]"
-            >
-              {postsLoading ? (
-                <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M21 3v5m0 0h-5m5 0-3-2.708A9 9 0 1 0 20.777 14"/></svg>
-              )}
-              Refresh Posts
-            </Button>
-            
-            {selectedPost && (
-              <Button 
-                type="button" 
-                variant="destructive"
-                onClick={() => handleDeletePost(selectedPost)}
-                disabled={loading}
-                className="min-w-[120px] bg-red-600 hover:bg-red-700 text-white"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                Delete Post
-              </Button>
-            )}
-            
-            {editMode && (
-              <Button 
-                type="button" 
-                variant="secondary"
-                onClick={cancelEdit}
-                className="min-w-[120px]"
-              >
-                Cancel Editing
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      {/* OpenAI Bypass Option - Updated design */}
-      {editMode && (
-        <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-100 p-2 rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-medium text-lg">OpenAI Translation</h3>
-                <p className="text-gray-600">Toggle this option to bypass OpenAI when making minor updates</p>
-              </div>
+      {/* Easter egg animation */}
+      <AnimatePresence>
+        {showEasterEgg && (
+          <>
+            {/* Debug indicator to see if state is changing */}
+            <div className="fixed top-0 left-0 bg-red-500 text-white p-2 z-50">
+              Easter Egg Activated! Count: {easterEggCount}
             </div>
-            <div className="flex items-center space-x-3">
-              <span className="font-medium text-sm text-gray-700">{bypassOpenAI ? 'Disabled' : 'Enabled'}</span>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox"
-                  value=""
-                  className="sr-only peer"
-                  checked={!bypassOpenAI}
-                  onChange={() => setBypassOpenAI(!bypassOpenAI)}
+            
+            <motion.div 
+              className="fixed inset-0 pointer-events-none flex items-center justify-center z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                initial={{ y: -100, scale: 0, rotate: 0 }}
+                animate={{ 
+                  y: 0, 
+                  scale: 1, 
+                  rotate: easterEggCount % 3 === 0 ? [0, -10, 10, -10, 0] : [0, 10, -10, 10, 0]
+                }}
+                transition={{ 
+                  y: { type: "spring", bounce: 0.5 },
+                  scale: { duration: 0.8 },
+                  rotate: { duration: 1 }
+                }}
+                className="relative"
+              >
+                <motion.img 
+                  src="https://bageledu.sfo3.cdn.digitaloceanspaces.com/hyejeong-removebg-preview.png" 
+                  alt="HJ" 
+                  className="h-64 w-auto"
+                  animate={{ 
+                    scale: [1, 1.05, 1],
+                    y: [0, -5, 0]
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 2
+                  }}
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-          </div>
+                <motion.div 
+                  className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-white px-6 py-2 rounded-full shadow-lg whitespace-nowrap"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <p className="text-sm font-bold text-pink-500">💕 YD says hi! and Love you 💕</p>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {!session && (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+          <h2 className="text-2xl font-bold mb-4 text-center">Sign in required</h2>
+          <p className="text-gray-600 mb-6 text-center">Please sign in to access the blog post creator.</p>
+          <Button onClick={() => signIn()} className="w-full sm:w-auto">Sign in</Button>
         </div>
       )}
       
-      <Tabs defaultValue="content" className="space-y-6">
-        <TabsList className="w-full grid grid-cols-2 p-1 h-12 bg-gray-100 rounded-lg">
-          <TabsTrigger 
-            value="content" 
-            className="rounded-md h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium"
-          >
-            Content
-          </TabsTrigger>
-          <TabsTrigger 
-            value="preview" 
-            className="rounded-md h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium"
-          >
-            Bilingual Preview
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="content" className="p-8 bg-white rounded-lg shadow-sm border border-gray-100 mt-4">
-          <form className="space-y-6" onSubmit={(e) => {
-            e.preventDefault();
-            generatePreview();
-          }}>
-            <div className="space-y-5">
-              <div>
-                <Label htmlFor="title" className="text-base font-medium mb-2 block">Title</Label>
-                <Input
-                  id="title"
-                  placeholder="Enter your blog post title"
-                  className="h-10 px-3 py-2 text-base"
-                  {...register("title", { required: true })}
-                />
-                {errors.title && (
-                  <p className="text-sm text-red-500 mt-1">Title is required</p>
-                )}
-              </div>
-              
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <Label htmlFor="content" className="text-base font-medium">Content</Label>
-                  <span className="text-sm text-gray-500">Enter in any language, AI will detect and translate</span>
-                </div>
-                <Textarea
-                  id="content"
-                  placeholder="Write your blog post content (in any language)"
-                  className="min-h-[350px] text-base px-3 py-2"
-                  {...register("content", { required: true })}
-                />
-                {errors.content && (
-                  <p className="text-sm text-red-500 mt-1">Content is required</p>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <Label htmlFor="category" className="text-base font-medium mb-2 block">Category</Label>
-                <Input
-                  id="category"
-                  placeholder="e.g. College Planning"
-                  className="h-10 px-3 py-2 text-base"
-                  {...register("category", { required: true })}
-                />
-                {errors.category && (
-                  <p className="text-sm text-red-500 mt-1">Category is required</p>
-                )}
-              </div>
-              
-              <div>
-                <Label htmlFor="tags" className="text-base font-medium mb-2 block">Tags (comma separated)</Label>
-                <Input
-                  id="tags"
-                  placeholder="e.g. College, Planning, Education"
-                  className="h-10 px-3 py-2 text-base"
-                  {...register("tags", { required: true })}
-                />
-                {errors.tags && (
-                  <p className="text-sm text-red-500 mt-1">At least one tag is required</p>
-                )}
-              </div>
-              
-              <div>
-                <Label htmlFor="author" className="text-base font-medium mb-2 block">Author</Label>
-                <Input
-                  id="author"
-                  placeholder="Your name"
-                  className="h-10 px-3 py-2 text-base"
-                  {...register("author", { required: true })}
-                />
-                {errors.author && (
-                  <p className="text-sm text-red-500 mt-1">Author is required</p>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="image" className="text-base font-medium mb-2 block">Featured Image</Label>
-              <Input
-                id="image"
-                type="file"
-                accept="image/*"
-                className="h-auto py-2"
-                {...register("image", { required: !imageUrl })}
-                ref={imageInputRef}
-              />
-              {errors.image && (
-                <p className="text-sm text-red-500 mt-1">Featured image is required</p>
-              )}
-              {imageUrl && (
-                <div className="mt-3">
-                  <Badge className="bg-green-100 text-green-800 hover:bg-green-200 px-3 py-1 font-medium">Image Uploaded</Badge>
-                  <div className="mt-3 border rounded-lg overflow-hidden">
-                    <img src={imageUrl} alt="Preview" className="h-48 w-full object-cover" />
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex justify-end pt-6">
-              <Button
-                type="submit"
-                disabled={aiLoading}
-                className="min-w-[200px] py-5 text-base font-medium"
+      {session && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sm:gap-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">BagelEdu Content Studio</h1>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button 
+                onClick={fetchExistingPosts} 
+                variant="outline" 
+                className="bg-white hover:bg-gray-50 text-black font-medium border border-gray-200 hover:border-gray-300 shadow-sm transition-all w-1/2 sm:w-auto flex items-center gap-2"
+                disabled={postsLoading}
               >
-                {aiLoading ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                {postsLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Generating Preview...
-                  </span>
+                    <span>Loading...</span>
+                  </>
                 ) : (
-                  `Generate ${editMode ? 'Updated' : 'Bilingual'} Preview`
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Load Existing Posts</span>
+                  </>
                 )}
               </Button>
-            </div>
-          </form>
-        </TabsContent>
-        
-        <TabsContent value="preview" className="bg-white rounded-lg shadow-sm border border-gray-100 mt-4">
-          <div className="p-8">
-            {!preview ? (
-              <div className="flex flex-col items-center justify-center h-full min-h-[300px] border-2 border-dashed border-gray-200 rounded-md p-8 text-gray-500 bg-gray-50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 mb-3">
-                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <path d="M12 18v-6"></path>
-                  <path d="M9 15h6"></path>
+              <Button
+                onClick={() => { 
+                  setEditMode(false);
+                  setSelectedPost(null);
+                  reset();
+                  setImageUrl("");
+                  setPreview(null);
+                  setRawMarkdown("");
+                }}
+                variant="outline"
+                className="bg-white hover:bg-gray-50 text-black font-medium border border-gray-200 hover:border-gray-300 shadow-sm transition-all w-1/2 sm:w-auto flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
-                <p className="text-base mb-4">Generate a preview to see the bilingual content</p>
-                <Button 
-                  className="mt-2 px-6" 
-                  onClick={generatePreview}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Generating...
-                    </span>
-                  ) : (
-                    "Generate Preview"
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-10">
-                {(() => {
-                  // Debug logging to see what's in the preview object
-                  console.log("Preview data being rendered:", {
-                    titleEn: preview.titleEn || "empty",
-                    titleKo: preview.titleKo || "empty",
-                    excerptEn: preview.excerptEn || "empty",
-                    excerptKo: preview.excerptKo || "empty", 
-                    contentLengths: {
-                      en: preview.contentEn?.length || 0,
-                      ko: preview.contentKo?.length || 0
-                    }
-                  });
-                  return null;
-                })()}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-5">
-                    <h3 className="font-semibold text-lg border-b pb-3 text-blue-700">English</h3>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Title</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[42px]">
-                        {preview.titleEn || "No English title available"}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Excerpt</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[80px]">
-                        {preview.excerptEn || "No English excerpt available"}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Content</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[350px] max-h-[350px] overflow-y-auto">
-                        <div dangerouslySetInnerHTML={{ __html: (preview.contentEn || "No English content available").replace(/\n/g, '<br />') }} />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-5">
-                    <h3 className="font-semibold text-lg border-b pb-3 text-blue-700">Korean</h3>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Title</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[42px]">
-                        {preview.titleKo || "No Korean title available"}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Excerpt</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[80px]">
-                        {preview.excerptKo || "No Korean excerpt available"}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">Content</Label>
-                      <div className="mt-1 p-3 border rounded-md bg-gray-50 text-base min-h-[350px] max-h-[350px] overflow-y-auto">
-                        <div dangerouslySetInnerHTML={{ __html: (preview.contentKo || "No Korean content available").replace(/\n/g, '<br />') }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Add image preview section */}
-                {imageUrl && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold text-lg mb-3 text-blue-700">Featured Image</h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <img src={imageUrl} alt="Featured Image" className="w-full max-h-[350px] object-cover" />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex justify-center mt-6">
-                  <Button 
-                    onClick={generatePreview} 
-                    variant="outline"
-                    disabled={aiLoading}
-                    className="min-w-[200px]"
-                  >
-                    {aiLoading ? (
-                      <span className="flex items-center gap-2">
-                        <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Regenerating...
-                      </span>
-                    ) : (
-                      "Regenerate Preview"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
+                <span>New Post</span>
+              </Button>
+            </div>
           </div>
           
-          {preview && (
-            <>
-              {/* Raw Markdown Debug Section */}
-              <div className="mt-2 border-t pt-8 px-8">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-medium flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 3v4a1 1 0 0 0 1 1h4"></path>
-                      <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"></path>
-                      <path d="M10 13v4"></path>
-                      <path d="M14 13v4"></path>
-                    </svg>
-                    Raw Markdown Debug
-                  </h2>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-sm"
-                    onClick={() => {
-                      // Copy raw markdown to clipboard
-                      if (rawMarkdown) {
-                        navigator.clipboard.writeText(rawMarkdown);
-                        showAlert("Markdown copied to clipboard!");
-                      }
-                    }}
-                    disabled={!rawMarkdown}
+          {/* Show existing posts if available */}
+          {existingPosts.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-xl font-semibold mb-4">Recently uploaded Posts</h2>
+              <div className={`${existingPosts.length > 3 ? 'flex overflow-x-auto pb-4 snap-x snap-mandatory' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'} gap-4`}>
+                {existingPosts.map((post) => (
+                  <Card 
+                    key={post.path} 
+                    className={`border border-gray-200 shadow-sm hover:shadow transition-shadow ${existingPosts.length > 3 ? 'flex-shrink-0 w-full sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] snap-start' : ''} flex flex-col`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Copy Markdown
-                  </Button>
-                </div>
-                <div className="bg-gray-50 border rounded-md p-4 overflow-auto max-h-[300px]">
-                  <pre className="text-sm font-mono whitespace-pre-wrap" id="rawMarkdown">
-                    {rawMarkdown || "No markdown generated yet. Press 'Generate Preview' first."}
-                  </pre>
-                </div>
+                    <div className="relative aspect-[16/10] overflow-hidden rounded-t-md bg-gray-100">
+                      {post.image ? (
+                        <img 
+                          src={imageUrlValidation(post.image) ? post.image : "https://bageledu.sfo3.cdn.digitaloceanspaces.com/bageledu-og-image-v3.webp"} 
+                          alt={post.titleEn || "Featured image"} 
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <img src="https://bageledu.sfo3.cdn.digitaloceanspaces.com/bageledu-og-image-v3.webp" alt="Bagel Edu" className="object-cover w-full h-full" />
+                      )}
+                      <div className="absolute top-2 right-2">
+                        <Badge className="bg-white text-gray-800 shadow-sm">{post.category || "Uncategorized"}</Badge>
+                      </div>
+                    </div>
+                    <CardContent className="p-4 flex-1 flex flex-col">
+                      <div className="mb-2">
+                        <h3 className="font-semibold text-lg line-clamp-2">{post.titleEn || "(No title)"}</h3>
+                        <p className="text-sm text-gray-500 mt-1 mb-2">
+                          {post.date ? new Date(post.date).toLocaleDateString() : "No date"} • {post.author || "Anonymous"}
+                        </p>
+                        <p className="text-sm text-gray-700 line-clamp-2">{post.excerptEn || "(No excerpt)"}</p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {post.tags && post.tags.split(",").map((tag: string, i: number) => (
+                          <Badge key={i} className="bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200">
+                            {tag.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-auto pt-4">
+                        <Button 
+                          onClick={() => loadPostData(post)} 
+                          className="flex-1 bg-black hover:bg-gray-800 text-white"
+                        >
+                          Edit
+                        </Button>
+                        <Button 
+                          onClick={() => handleDeletePost(post)} 
+                          variant="outline" 
+                          className="bg-white text-black hover:bg-gray-100 border-gray-200"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4 pt-8 px-8 pb-8 border-t mt-6">
-                <Button
-                  onClick={handleSubmit(onSubmit)}
-                  className="flex-1 py-5 text-base font-medium"
-                  disabled={loading || !preview}
-                >
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      {editMode ? 'Updating...' : 'Publishing...'}
-                    </span>
-                  ) : (
-                    editMode ? 'Update Blog Post' : 'Publish Blog Post'
-                  )}
-                </Button>
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    if (editMode) {
-                      cancelEdit();
-                    } else {
-                      reset();
-                      setPreview(null);
-                      setImageUrl("");
-                      if (imageInputRef.current) imageInputRef.current.value = "";
-                    }
-                  }}
-                  disabled={loading}
-                  className="py-5 min-w-[150px] text-base font-medium"
-                >
-                  {editMode ? 'Cancel Edit' : 'Reset Form'}
-                </Button>
-              </div>
-              
-              {error && (
-                <div className="px-6 pb-6">
-                  <div className="p-4 bg-red-50 text-red-700 rounded-md border border-red-200">
-                    {error}
-                  </div>
-                </div>
+              {existingPosts.length > 3 && (
+                <p className="text-sm text-gray-500 mt-2 text-center">
+                  Swipe to see more posts
+                </p>
               )}
-              
-              {success && (
-                <div className="px-6 pb-6">
-                  <div className="p-4 bg-green-50 text-green-700 rounded-md border border-green-200">
-                    Your blog post has been {editMode ? 'updated' : 'published'} successfully!
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
-      
-      {/* AI Chat Bubble Helper */}
-      <AIChatAssistant 
-        isLoading={aiLoading} 
-        initialMessage="I can help you with blog ideas, content structure, and suggestions. What would you like assistance with?"
-      />
+
+          <AIChatAssistant 
+            isLoading={loading || aiLoading}
+            initialMessage="I'm your blog post assistant. I can help you with ideas, content structure, or any questions about creating bilingual blog posts. What would you like help with?"
+          />
+
+          <Tabs defaultValue="edit" className="w-full">
+            <div className="mb-4">
+              <TabsList>
+                <TabsTrigger value="edit" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  Edit Content
+                </TabsTrigger>
+                <TabsTrigger value="preview" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  Preview Content
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <TabsContent value="edit" className="focus-visible:outline-none focus-visible:ring-0">
+              <Card className="border-gray-200 shadow-sm">
+                <CardContent className="p-6">
+                  <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="title" className="font-medium">Title</Label>
+                        <Input
+                          id="title"
+                          placeholder="Post title..."
+                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          {...register("title", { required: true })}
+                        />
+                        {errors.title && <span className="text-red-500 text-sm">Required</span>}
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="category" className="font-medium">Category</Label>
+                        <Input
+                          id="category"
+                          placeholder="e.g. College Planning"
+                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          {...register("category", { required: true })}
+                        />
+                        {errors.category && <span className="text-red-500 text-sm">Required</span>}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="author" className="font-medium">Author</Label>
+                        <Input
+                          id="author"
+                          placeholder="Author name"
+                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          {...register("author", { required: true })}
+                        />
+                        {errors.author && <span className="text-red-500 text-sm">Required</span>}
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="tags" className="font-medium">Tags (comma separated)</Label>
+                        <Input
+                          id="tags"
+                          placeholder="tag1, tag2, tag3"
+                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          {...register("tags", { required: true })}
+                        />
+                        {errors.tags && <span className="text-red-500 text-sm">Required</span>}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="content" className="font-medium">Blog Post Content</Label>
+                      <Textarea
+                        id="content"
+                        placeholder="Your content in markdown..."
+                        rows={12}
+                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[200px] font-mono text-sm"
+                        {...register("content", { required: true })}
+                      />
+                      {errors.content && <span className="text-red-500 text-sm">Required</span>}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="image" className="font-medium">Featured Image</Label>
+                      <Input
+                        id="image"
+                        type="file"
+                        accept="image/*"
+                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        {...register("image", { required: !imageUrl && !editMode })}
+                        ref={imageInputRef}
+                      />
+                      {errors.image && <span className="text-red-500 text-sm">Required</span>}
+                      {imageUrl && (
+                        <div className="mt-2 relative rounded-md overflow-hidden border border-gray-200">
+                          <img src={imageUrl} alt="Uploaded" className="max-h-40 w-full object-cover" />
+                          <div className="absolute top-2 right-2">
+                            <Badge className="bg-white text-gray-800 hover:bg-gray-100 shadow-sm">Uploaded</Badge>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="flex items-center w-full sm:w-auto bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 transition-all hover:bg-gray-100">
+                        <label htmlFor="bypass" className="flex items-center cursor-pointer">
+                          <div className="relative">
+                            <input 
+                              type="checkbox" 
+                              id="bypass" 
+                              checked={bypassOpenAI} 
+                              onChange={() => setBypassOpenAI(!bypassOpenAI)}
+                              className="sr-only"
+                            />
+                            <div className={`block w-12 h-6 rounded-full transition-colors duration-200 ease-in-out ${bypassOpenAI ? 'bg-black' : 'bg-gray-300'}`}></div>
+                            <div className={`absolute left-0.5 top-0.5 bg-white w-5 h-5 rounded-full transition-transform duration-200 ease-in-out ${bypassOpenAI ? 'transform translate-x-6' : ''}`}></div>
+                          </div>
+                          <div className="ml-4">
+                            <span className="text-sm font-medium text-gray-800">Skip AI generation</span>
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-800">Manual content</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="flex-1"></div>
+                      <Button
+                        onClick={generatePreview}
+                        className="bg-black hover:bg-gray-800 text-white px-6 py-2.5 rounded-lg shadow-sm transition-all hover:shadow flex items-center gap-2"
+                        disabled={loading || aiLoading}
+                      >
+                        {aiLoading ? (
+                          <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="font-medium">Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                            <span className="font-medium">Generate Preview</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="flex-1"></div>
+                      <Button
+                        type="submit"
+                        className="w-full sm:w-auto bg-gradient-to-r from-gray-900 to-black text-white flex gap-2 items-center px-6 py-2.5 rounded-lg shadow-sm transition-all hover:shadow hover:from-black hover:to-gray-900"
+                        disabled={loading || aiLoading}
+                      >
+                        {loading ? (
+                          <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="font-medium">Publishing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.08V8l-6-6H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2v-3.08c.58-.77 1-1.73 1-2.92 0-1.2-.42-2.15-1-2.92z"></path><path d="M14 2v6h6"></path><path d="M22.66 15.5c0 1.8-1.77 3.5-4 3.5h-5.33c-2.23 0-4-1.7-4-3.5s1.77-3.5 4-3.5h5.33c2.23 0 4 1.7 4 3.5z"></path></svg>
+                            <span className="font-medium">Publish Post</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="preview" className="focus-visible:outline-none focus-visible:ring-0">
+              <Card className="border-gray-200 shadow-sm">
+                <CardContent className="p-6">
+                  {!preview ? (
+                    <div className="text-center py-10">
+                      <div className="mb-4 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No preview available</h3>
+                      <p className="text-gray-500 mb-4">Click "Generate Preview" to see how your post will look in both languages.</p>
+                      <Button
+                        onClick={generatePreview}
+                        className="bg-black hover:bg-gray-800 text-white px-6 py-2.5 rounded-lg shadow-sm transition-all hover:shadow flex items-center gap-2"
+                        disabled={loading || aiLoading}
+                      >
+                        {aiLoading ? (
+                          <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="font-medium">Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                            <span className="font-medium">Generate Preview</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold">Bilingual Preview</h2>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowRawMarkdown && setShowRawMarkdown(!showRawMarkdown)}
+                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                          >
+                            {showRawMarkdown ? "View Rendered" : "View Markdown"}
+                          </Button>
+                          <Button
+                            onClick={handleSubmitDirectly}
+                            size="sm"
+                            className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow-sm transition-all hover:shadow flex items-center gap-1"
+                            disabled={loading || aiLoading}
+                          >
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.08V8l-6-6H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2v-3.08c.58-.77 1-1.73 1-2.92 0-1.2-.42-2.15-1-2.92z"></path><path d="M14 2v6h6"></path><path d="M22.66 15.5c0 1.8-1.77 3.5-4 3.5h-5.33c-2.23 0-4-1.7-4-3.5s1.77-3.5 4-3.5h5.33c2.23 0 4 1.7 4 3.5z"></path></svg>
+                              <span className="font-medium">Publish Now</span>
+                            </>
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Preview content */}
+                      {showRawMarkdown ? (
+                        <div className="border rounded-md p-4 bg-gray-50">
+                          <pre className="text-sm font-mono whitespace-pre-wrap overflow-x-auto">
+                            {rawMarkdown}
+                          </pre>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* English preview */}
+                          <div className="border rounded-md overflow-hidden">
+                            <div className="bg-gray-100 border-b px-4 py-2 flex items-center">
+                              <div className="mr-2">🇺🇸</div>
+                              <div className="font-medium">English Preview</div>
+                            </div>
+                            <div className="p-4">
+                              {imageUrl && (
+                                <div className="mb-4 border rounded overflow-hidden">
+                                  <img src={imageUrl} alt="Featured" className="w-full h-48 object-cover" />
+                                </div>
+                              )}
+                              <h1 className="text-2xl font-bold mb-2">{preview.titleEn}</h1>
+                              <div className="text-gray-500 italic mb-4">{preview.excerptEn}</div>
+                              <div className="prose prose-sm max-w-none">
+                                <ReactMarkdown>{preview.contentEn}</ReactMarkdown>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Korean preview */}
+                          <div className="border rounded-md overflow-hidden">
+                            <div className="bg-gray-100 border-b px-4 py-2 flex items-center">
+                              <div className="mr-2">🇰🇷</div>
+                              <div className="font-medium">Korean Preview</div>
+                            </div>
+                            <div className="p-4">
+                              {imageUrl && (
+                                <div className="mb-4 border rounded overflow-hidden">
+                                  <img src={imageUrl} alt="Featured" className="w-full h-48 object-cover" />
+                                </div>
+                              )}
+                              <h1 className="text-2xl font-bold mb-2">{preview.titleKo}</h1>
+                              <div className="text-gray-500 italic mb-4">{preview.excerptKo}</div>
+                              <div className="prose prose-sm max-w-none">
+                                <ReactMarkdown>{preview.contentKo}</ReactMarkdown>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="pt-4 border-t border-gray-200">
+                        <Button 
+                          onClick={handleSubmitDirectly}
+                          className="w-full sm:w-auto bg-gradient-to-r from-gray-900 to-black text-white flex gap-2 items-center px-6 py-2.5 rounded-lg shadow-sm transition-all hover:shadow hover:from-black hover:to-gray-900"
+                          disabled={loading || aiLoading}
+                        >
+                          {loading ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span className="font-medium">Publishing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.08V8l-6-6H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2v-3.08c.58-.77 1-1.73 1-2.92 0-1.2-.42-2.15-1-2.92z"></path><path d="M14 2v6h6"></path><path d="M22.66 15.5c0 1.8-1.77 3.5-4 3.5h-5.33c-2.23 0-4-1.7-4-3.5s1.77-3.5 4-3.5h5.33c2.23 0 4 1.7 4 3.5z"></path></svg>
+                              <span className="font-medium">Publish Post</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {error && (
+            <div className="mt-4 bg-red-50 text-red-600 p-4 rounded-md border border-red-100">
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {success && (
+            <div className="mt-4 bg-green-50 text-green-600 p-4 rounded-md border border-green-100">
+              <p>Post published successfully!</p>
+            </div>
+          )}
+          
+          {/* Footer message with easter egg trigger */}
+          <div className="flex justify-end items-center pt-8 text-sm text-gray-500">
+            <span className="flex items-center gap-1">
+              Made with 
+              <motion.div
+                whileHover={{ scale: 1.3 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  triggerEasterEgg();
+                }}
+                className="cursor-pointer relative z-10 p-2 -m-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ff0000" stroke="#ff0000" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse transition-transform duration-300 hover:scale-110 scale-105">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+              </motion.div>
+              for HJ
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

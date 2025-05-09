@@ -25,3 +25,26 @@ export function slugify(text: string) {
     .toLowerCase()
     .replace(/[-\s]+/g, "-");
 }
+
+export function imageUrlValidation(url: string): boolean {
+  if (!url) return false;
+  
+  // Basic URL validation
+  try {
+    new URL(url);
+  } catch (e) {
+    return false;
+  }
+  
+  // Ensure URL has valid image extension or is from a known image hosting service
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+  const isKnownImageService = [
+    'digitaloceanspaces.com',
+    'amazonaws.com',
+    'cloudinary.com',
+    'imgix.net',
+    'googleapis.com'
+  ].some(service => url.includes(service));
+  
+  return imageExtensions.some(ext => url.toLowerCase().endsWith(ext)) || isKnownImageService;
+}

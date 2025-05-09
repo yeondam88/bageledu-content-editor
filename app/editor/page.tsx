@@ -108,6 +108,8 @@ function AiGenerateButton({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [previewContent, setPreviewContent] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleGenerate = async () => {
     if (!prompt) {
@@ -117,6 +119,7 @@ function AiGenerateButton({
 
     setGenerating(true);
     setError("");
+    setShowPreview(false);
 
     try {
       const response = await fetch("/api/openai", {
@@ -138,114 +141,145 @@ function AiGenerateButton({
 
       const data = await response.json();
       
-      // Update form field based on type and language
-      if (type === "title") {
-        setValue(`title_${language}`, data.content);
-      } else if (type === "excerpt") {
-        setValue(`excerpt_${language}`, data.content);
-      } else if (type === "content") {
-        // For content-only generation, make sure we're not including titles in the content
-        let content = data.content;
-        
-        // Remove any heading that might be at the beginning of the content
-        // This prevents title duplication since titles are handled separately
-        const lines = content.split('\n');
-        const titleIndex = lines.findIndex((line: string) => line.startsWith('# ') || line.startsWith('## '));
-        
-        if (titleIndex === 0) { // Only remove if it's the first line
-          content = lines.slice(1).join('\n').trim();
-        }
-        
-        setValue(`content_${language}`, content);
-      } else if (type === "all") {
-        // Parse the AI response - this is simplified and might need adjustment
-        const lines = data.content.split('\n');
-        let title = '';
-        let excerpt = '';
-        let content = '';
-        
-        // Extract title (usually first line or line with # or ##)
-        const titleIndex = lines.findIndex((line: string) => line.startsWith('# ') || line.startsWith('## '));
-        if (titleIndex >= 0) {
-          title = lines[titleIndex].replace(/^#+ /, '');
-        } else if (lines.length > 0) {
-          title = lines[0];
-        }
-        
-        // Try to find excerpt (usually shorter paragraph after title)
-        for (let i = titleIndex + 1; i < lines.length; i++) {
-          if (lines[i].trim() && !lines[i].startsWith('#')) {
-            excerpt = lines[i];
-            break;
-          }
-        }
-        
-        // The rest is content
-        content = lines.slice(Math.max(titleIndex + 1, 1)).join('\n');
-        
-        setValue(`title_${language}`, title);
-        setValue(`excerpt_${language}`, excerpt);
-        setValue(`content_${language}`, content);
-      }
-
-      setDialogOpen(false);
+      // Set preview content for review
+      setPreviewContent(data.content);
+      setShowPreview(true);
+      setGenerating(false);
+      
     } catch (err: any) {
       setError(err.message || "An error occurred");
-    } finally {
       setGenerating(false);
     }
+  };
+
+  const applyContent = () => {
+    // Update form field based on type and language
+    if (type === "title") {
+      setValue(`title_${language}`, previewContent);
+    } else if (type === "excerpt") {
+      setValue(`excerpt_${language}`, previewContent);
+    } else if (type === "content") {
+      // For content-only generation, make sure we're not including titles in the content
+      let content = previewContent;
+      
+      // Remove any heading that might be at the beginning of the content
+      // This prevents title duplication since titles are handled separately
+      const lines = content.split('\n');
+      const titleIndex = lines.findIndex((line: string) => line.startsWith('# ') || line.startsWith('## '));
+      
+      if (titleIndex === 0) { // Only remove if it's the first line
+        content = lines.slice(1).join('\n').trim();
+      }
+      
+      setValue(`content_${language}`, content);
+    } else if (type === "all") {
+      // Parse the AI response - this is simplified and might need adjustment
+      const lines = previewContent.split('\n');
+      let title = '';
+      let excerpt = '';
+      let content = '';
+      
+      // Extract title (usually first line or line with # or ##)
+      const titleIndex = lines.findIndex((line: string) => line.startsWith('# ') || line.startsWith('## '));
+      if (titleIndex >= 0) {
+        title = lines[titleIndex].replace(/^#+ /, '');
+      } else if (lines.length > 0) {
+        title = lines[0];
+      }
+      
+      // Try to find excerpt (usually shorter paragraph after title)
+      for (let i = titleIndex + 1; i < lines.length; i++) {
+        if (lines[i].trim() && !lines[i].startsWith('#')) {
+          excerpt = lines[i];
+          break;
+        }
+      }
+      
+      // The rest is content
+      content = lines.slice(Math.max(titleIndex + 1, 1)).join('\n');
+      
+      setValue(`title_${language}`, title);
+      setValue(`excerpt_${language}`, excerpt);
+      setValue(`content_${language}`, content);
+    }
+
+    setDialogOpen(false);
   };
 
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-1 bg-violet-50 border-violet-200 hover:bg-violet-100 text-violet-700"
-          onClick={() => setDialogOpen(true)}
+        <Button 
+          variant="outline" 
+          className={`text-sm flex-1 ${language === "en" ? "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100" : "bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100"}`}
           disabled={loading}
+          data-dialog={`${language}-${type}`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg>
-          AI Generate {language === "en" ? "🇺🇸" : "🇰🇷"}
+          {type === "all" ? "Complete" : type.charAt(0).toUpperCase() + type.slice(1)} {language === "en" ? "🇺🇸" : "🇰🇷"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[550px] max-w-[calc(100%-2rem)] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Generate with AI ({language === "en" ? "English" : "Korean"})</DialogTitle>
+          <DialogTitle>
+            Generate {type === "title" ? "Title" : type === "excerpt" ? "Excerpt" : type === "content" ? "Content" : "Complete Post"}
+            &nbsp;in {language === "en" ? "English 🇺🇸" : "Korean 🇰🇷"}
+          </DialogTitle>
           <DialogDescription>
-            Enter a prompt to generate {type === "all" ? "a complete post" : `the ${type}`} in {language === "en" ? "English" : "Korean"}.
+            Enter a prompt describing what you want to generate.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <Textarea
-            placeholder={`e.g., Write about the importance of early college planning${language === "ko" ? " in Korean" : ""}`}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={5}
-          />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating || !prompt}
-            className="w-full"
-          >
-            {generating ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Generating...
-              </>
-            ) : (
-              "Generate"
-            )}
-          </Button>
+        
+        {!showPreview ? (
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="prompt" className="text-right">Prompt</Label>
+              <Textarea 
+                id="prompt"
+                placeholder={`e.g. Write a ${type === "title" ? "title" : type === "excerpt" ? "brief excerpt" : "detailed content"} about college application tips`}
+                className="col-span-3"
+                rows={4}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+              />
+            </div>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+          </div>
+        ) : (
+          <div className="mt-4 border rounded-md p-4 bg-gray-50">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-medium">Preview</h3>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowPreview(false)}
+              >
+                Edit Prompt
+              </Button>
+            </div>
+            <div className="prose prose-sm mt-2 max-h-[300px] overflow-y-auto p-3 bg-white border rounded-md">
+              <pre className="whitespace-pre-wrap font-sans">{previewContent}</pre>
+            </div>
+          </div>
+        )}
+        
+        <DialogFooter className="flex flex-col sm:flex-row gap-3 mt-4">
+          {!showPreview ? (
+            <Button onClick={handleGenerate} disabled={generating || !prompt} className="w-full sm:w-auto">
+              {generating ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generating...
+                </>
+              ) : "Preview Generated Content"}
+            </Button>
+          ) : (
+            <Button onClick={applyContent} className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
+              Apply to Form
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -253,114 +287,218 @@ function AiGenerateButton({
 }
 
 function AIContentGenerator({ setValue, loading, setLoading }: { setValue: any, loading: boolean, setLoading: (loading: boolean) => void }) {
-  const [open, setOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<"en" | "ko">("en");
-  const [selectedType, setSelectedType] = useState<"title" | "excerpt" | "content" | "all">("content");
-
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState({ title_en: "", excerpt_en: "", content_en: "", title_ko: "", excerpt_ko: "", content_ko: "" });
+  
+  const handleGenerate = async (prompt: string) => {
+    if (!prompt) return;
+    
+    setGenerating(true);
+    
+    try {
+      // Generate English content first
+      const enResponse = await fetch("/api/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          language: "English",
+          type: "all",
+        }),
+      });
+      
+      if (!enResponse.ok) throw new Error("Failed to generate English content");
+      
+      const enData = await enResponse.json();
+      const enContent = parseGeneratedContent(enData.content);
+      
+      // Then generate Korean content
+      const koResponse = await fetch("/api/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Please translate the following content to Korean. Keep the same structure but adapt as needed for Korean readers:
+          
+Title: ${enContent.title}
+Excerpt: ${enContent.excerpt}
+Content: ${enContent.content}`,
+          language: "Korean",
+          type: "all",
+        }),
+      });
+      
+      if (!koResponse.ok) throw new Error("Failed to generate Korean content");
+      
+      const koData = await koResponse.json();
+      const koContent = parseGeneratedContent(koData.content);
+      
+      setGeneratedContent({
+        title_en: enContent.title,
+        excerpt_en: enContent.excerpt,
+        content_en: enContent.content,
+        title_ko: koContent.title,
+        excerpt_ko: koContent.excerpt,
+        content_ko: koContent.content
+      });
+      
+    } catch (error) {
+      console.error("Error generating content:", error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+  
+  const parseGeneratedContent = (rawContent: string) => {
+    const lines = rawContent.split('\n');
+    
+    // Extract title, excerpt, and content
+    let title = '';
+    let excerpt = '';
+    let content = '';
+    
+    // Look for title markers
+    const titleIndex = lines.findIndex(line => line.startsWith('# ') || line.startsWith('## ') || line.toLowerCase().startsWith('title:'));
+    
+    if (titleIndex >= 0) {
+      title = lines[titleIndex].replace(/^#+ /, '').replace(/^title:/i, '').trim();
+      
+      // Look for excerpt
+      for (let i = titleIndex + 1; i < lines.length; i++) {
+        if (lines[i].trim() && !lines[i].startsWith('#')) {
+          if (lines[i].toLowerCase().startsWith('excerpt:')) {
+            excerpt = lines[i].replace(/^excerpt:/i, '').trim();
+          } else {
+            excerpt = lines[i].trim();
+            break;
+          }
+        }
+      }
+      
+      // Rest is content
+      content = lines.slice(Math.max(titleIndex + 1, 1)).join('\n').trim();
+      
+      // Remove excerpt from content if it's there
+      if (excerpt && content.startsWith(excerpt)) {
+        content = content.substring(excerpt.length).trim();
+      }
+    } else {
+      // Fallback if no title marker found
+      if (lines.length > 0) title = lines[0].trim();
+      if (lines.length > 1) excerpt = lines[1].trim();
+      content = lines.slice(2).join('\n').trim();
+    }
+    
+    return { title, excerpt, content };
+  };
+  
+  const applyGeneratedContent = () => {
+    setValue("title_en", generatedContent.title_en);
+    setValue("excerpt_en", generatedContent.excerpt_en);
+    setValue("content_en", generatedContent.content_en);
+    setValue("title_ko", generatedContent.title_ko);
+    setValue("excerpt_ko", generatedContent.excerpt_ko);
+    setValue("content_ko", generatedContent.content_ko);
+    setDialogOpen(false);
+  };
+  
   return (
-    <div className="flex flex-col sm:flex-row gap-2 mb-6">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button 
-            variant="outline" 
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200"
-            disabled={loading}
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogTrigger asChild>
+        <Button 
+          onClick={() => setDialogOpen(true)}
+          className="w-full md:w-auto mb-4"
+          size="lg"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="mr-2"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12c0 2.7 1.1 5.2 2.8 7l-.4 4 4-.4c1.8 1.8 4.3 2.8 7 2.8 5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18c-2.2 0-4.3-.8-5.9-2.2l-.5-.5-.6.1-2 .2.2-2 .1-.6-.5-.5C1.8 13 1 11 1 8.9 1 6.2 2.2 3.8 4.1 2 6 .2 8.5-1 11.1-1c5 0 9 4 9 9 0 2.7-1.1 5.2-2.8 7-1.9 1.8-4.3 3-7 3z"></path></svg>
-            AI Content Generator
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium leading-none">Generate Content with AI</h4>
-              <p className="text-sm text-muted-foreground">
-                Choose what content to generate and in which language.
-              </p>
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"></path>
+            <path d="M12 6v4"></path>
+            <path d="M12 14h.01"></path>
+          </svg>
+          AI Content Generator
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Generate Content with AI</DialogTitle>
+          <DialogDescription>
+            Describe what you want to write about and the AI will generate content in both English and Korean.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <AIChatAssistant 
+            onSend={handleGenerate}
+            loading={generating}
+            placeholder="Describe what you want to write about..."
+            compact={true}
+          />
+          
+          {generating && (
+            <div className="text-center p-4">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+              <p className="mt-2 text-sm text-muted-foreground">Generating content in both languages...</p>
             </div>
-            <div className="grid gap-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="grid gap-1">
-                  <Label htmlFor="language">Language</Label>
-                  <Select 
-                    defaultValue="en" 
-                    onValueChange={(value) => setSelectedLanguage(value as "en" | "ko")}
-                  >
-                    <SelectTrigger id="language">
-                      <SelectValue placeholder="Language" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="en">English 🇺🇸</SelectItem>
-                      <SelectItem value="ko">Korean 🇰🇷</SelectItem>
-                    </SelectContent>
-                  </Select>
+          )}
+          
+          {(generatedContent.title_en || generatedContent.content_en) && !generating && (
+            <div className="space-y-4 mt-4 border-t pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-medium mb-2">English Preview</h3>
+                  <div className="border rounded-md p-3 bg-gray-50 space-y-2 h-[200px] overflow-y-auto">
+                    <p className="font-semibold">{generatedContent.title_en}</p>
+                    <p className="text-sm text-gray-600 italic">{generatedContent.excerpt_en}</p>
+                    <div className="text-sm border-t pt-2">
+                      {generatedContent.content_en.split('\n').map((line, i) => (
+                        <p key={i} className="mb-1">{line}</p>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="grid gap-1 col-span-2">
-                  <Label htmlFor="type">Content Type</Label>
-                  <Select 
-                    defaultValue="content" 
-                    onValueChange={(value) => setSelectedType(value as "title" | "excerpt" | "content" | "all")}
-                  >
-                    <SelectTrigger id="type">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="title">Title Only</SelectItem>
-                      <SelectItem value="excerpt">Excerpt Only</SelectItem>
-                      <SelectItem value="content">Content Only</SelectItem>
-                      <SelectItem value="all">Complete Post</SelectItem>
-                    </SelectContent>
-                  </Select>
+                
+                <div>
+                  <h3 className="font-medium mb-2">Korean Preview</h3>
+                  <div className="border rounded-md p-3 bg-gray-50 space-y-2 h-[200px] overflow-y-auto">
+                    <p className="font-semibold">{generatedContent.title_ko}</p>
+                    <p className="text-sm text-gray-600 italic">{generatedContent.excerpt_ko}</p>
+                    <div className="text-sm border-t pt-2">
+                      {generatedContent.content_ko.split('\n').map((line, i) => (
+                        <p key={i} className="mb-1">{line}</p>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="pt-2">
-                <AiGenerateButton 
-                  language={selectedLanguage} 
-                  type={selectedType} 
-                  setValue={setValue}
-                  loading={loading}
-                  setLoading={setLoading}
-                />
-              </div>
+              
+              <Button 
+                onClick={applyGeneratedContent} 
+                className="w-full"
+                disabled={generating}
+              >
+                Apply Generated Content
+              </Button>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      <div className="flex gap-2">
-        <AiGenerateButton 
-          language="en" 
-          type="content" 
-          setValue={setValue}
-          loading={loading}
-          setLoading={setLoading}
-        />
-        <AiGenerateButton 
-          language="ko" 
-          type="content" 
-          setValue={setValue}
-          loading={loading}
-          setLoading={setLoading}
-        />
-      </div>
-    </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export default function EditorPage() {
   const { data: session } = useSession({ required: true });
-  
-  // Redirect to sign in if no session exists
-  if (!session) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <h1 className="text-2xl font-bold mb-4">Sign in required</h1>
-        <p className="text-gray-600 mb-4">Please sign in to access the content editor.</p>
-        <Button onClick={() => signIn()}>Sign in</Button>
-      </div>
-    );
-  }
-  
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
@@ -369,22 +507,27 @@ export default function EditorPage() {
   const [previewMode, setPreviewMode] = useState<"edit" | "split" | "preview">("split");
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
+  const [showRawMarkdown, setShowRawMarkdown] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   
+  // Initialize form with default values
+  const defaultValues = {
+    title_en: "",
+    title_ko: "",
+    excerpt_en: "",
+    excerpt_ko: "",
+    content_en: "",
+    content_ko: "",
+    category: "Education",
+    tags: "Education, Learning",
+    author: session?.user?.name || "Admin",
+    date: new Date().toISOString().split('T')[0],
+    image: undefined
+  };
+  
   const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors, isDirty } } = useForm({
-    defaultValues: {
-      title_en: "",
-      title_ko: "",
-      excerpt_en: "",
-      excerpt_ko: "",
-      content_en: "",
-      content_ko: "",
-      category: "Education",
-      tags: "Education, Learning",
-      author: session.user?.name || "Admin",
-      date: new Date().toISOString().split('T')[0],
-      image: undefined
-    }
+    defaultValues
   });
 
   const formValues = watch();
@@ -392,6 +535,8 @@ export default function EditorPage() {
 
   // Load from localStorage on mount
   useEffect(() => {
+    if (!session) return; // Don't load saved data if not logged in
+    
     const savedForm = localStorage.getItem('editorFormData');
     if (savedForm) {
       try {
@@ -404,11 +549,11 @@ export default function EditorPage() {
         console.error('Failed to load saved form data');
       }
     }
-  }, [setValue]);
+  }, [setValue, session]);
 
   // Auto-save to localStorage when form changes
   useEffect(() => {
-    if (!autoSaveEnabled || !isDirty) return;
+    if (!session || !autoSaveEnabled || !isDirty) return;
     
     const timeoutId = setTimeout(() => {
       localStorage.setItem('editorFormData', JSON.stringify(formValues));
@@ -416,8 +561,19 @@ export default function EditorPage() {
     }, 3000);
     
     return () => clearTimeout(timeoutId);
-  }, [formValues, autoSaveEnabled, isDirty]);
-
+  }, [formValues, autoSaveEnabled, isDirty, session]);
+  
+  // Redirect to sign in if no session exists
+  if (!session) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <h1 className="text-2xl font-bold mb-4">Sign in required</h1>
+        <p className="text-gray-600 mb-4">Please sign in to access the content editor.</p>
+        <Button onClick={() => signIn()}>Sign in</Button>
+      </div>
+    );
+  }
+  
   const onSubmit = async (data: any) => {
     setLoading(true);
     setError("");
@@ -515,10 +671,10 @@ export default function EditorPage() {
   };
 
   const renderForm = () => (
-    <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-      <div className="flex justify-between items-center">
+    <form className="space-y-6 px-2 sm:px-0" onSubmit={handleSubmit(onSubmit)}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
         <h2 className="text-xl font-bold">Post Content</h2>
-        <div className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md">
+        <div className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md w-full sm:w-auto">
           <div className="flex items-center space-x-2">
             <input 
               type="checkbox"
@@ -539,7 +695,7 @@ export default function EditorPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="title_en" className="font-medium">Title (EN)</Label>
@@ -615,7 +771,7 @@ export default function EditorPage() {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="space-y-2">
           <Label htmlFor="category" className="font-medium">Category</Label>
           <Input
@@ -668,7 +824,7 @@ export default function EditorPage() {
             id="image"
             type="file"
             accept="image/*"
-            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 max-w-full"
             {...register("image", { required: !imageUrl })}
             ref={imageInputRef}
             onChange={(e) => {
@@ -733,38 +889,35 @@ export default function EditorPage() {
     </form>
   );
 
-  const [showRawMarkdown, setShowRawMarkdown] = useState(false);
-  const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
-
   const renderPreview = () => (
-    <div className="h-full">
-      <div className="flex justify-between items-center mb-4">
+    <div className="h-full px-2 sm:px-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 sm:gap-0">
         <h2 className="text-xl font-bold">Preview</h2>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
           <Button 
             variant={showRawMarkdown ? "default" : "outline"}
             size="sm"
             onClick={() => setShowRawMarkdown(!showRawMarkdown)}
             className={showRawMarkdown ? 
-              "bg-blue-600 text-white hover:bg-blue-700" : 
-              "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+              "bg-blue-600 text-white hover:bg-blue-700 flex-1 sm:flex-none" : 
+              "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 flex-1 sm:flex-none"
             }
           >
             {showRawMarkdown ? "📄 View Rendered" : "📝 View Raw Markdown"}
           </Button>
-          <div className="bg-gray-50 px-3 py-1 rounded-md text-sm text-gray-500 border border-gray-200">Markdown Preview</div>
+          <div className="bg-gray-50 px-3 py-1 rounded-md text-sm text-gray-500 border border-gray-200 flex-1 sm:flex-none text-center sm:text-left">Markdown Preview</div>
         </div>
       </div>
       <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4 text-amber-700 text-sm">
         <strong>Note:</strong> The title is automatically added from the title field. Don't include an H1 heading at the beginning of your content to avoid title duplication.
       </div>
-      <div className="border rounded-md p-6 bg-white shadow-sm overflow-auto h-[calc(100vh-14rem)]">
+      <div className="border rounded-md p-4 sm:p-6 bg-white shadow-sm overflow-auto h-[calc(100vh-14rem)] max-h-[600px]">
         {showRawMarkdown ? (
-          <pre className="text-sm font-mono whitespace-pre-wrap overflow-x-auto bg-gray-50 p-4 rounded-md border border-gray-200">
+          <pre className="text-sm font-mono whitespace-pre-wrap overflow-x-auto bg-gray-50 p-4 rounded-md border border-gray-200 text-xs sm:text-sm">
             {markdownContent}
           </pre>
         ) : (
-          <div className="prose prose-blue max-w-none">
+          <div className="prose prose-blue max-w-none prose-sm sm:prose">
             {/* Add image preview at the top of the rendered content */}
             {imageUrl && (
               <div className="mb-6 not-prose">
@@ -778,19 +931,19 @@ export default function EditorPage() {
           </div>
         )}
       </div>
-      <div className="mt-4 flex justify-between">
+      <div className="mt-4 flex flex-col sm:flex-row justify-between gap-2 sm:gap-0">
         <Button 
           variant="outline" 
           size="sm"
           onClick={() => setShowRawMarkdown(!showRawMarkdown)}
-          className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+          className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 w-full sm:w-auto"
         >
           {showRawMarkdown ? "📄 View Rendered" : "📝 View Raw Markdown"}
         </Button>
         <Button 
           variant="outline" 
           size="sm" 
-          className="bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+          className="bg-green-50 text-green-600 border-green-200 hover:bg-green-100 w-full sm:w-auto"
           onClick={() => setRegenerateModalOpen(true)}
         >
           Regenerate Preview
@@ -866,9 +1019,9 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="container mx-auto py-10 px-8 max-w-6xl">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Create New Post</h1>
+    <div className="container mx-auto py-6 sm:py-10 px-4 sm:px-8 max-w-6xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-8 gap-2 sm:gap-0">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Create New Post</h1>
         <div className="text-sm text-gray-500">
           {session.user?.email && `Signed in as ${session.user.email}`}
         </div>
@@ -884,7 +1037,7 @@ export default function EditorPage() {
       
       {/* Regenerate Preview Modal */}
       <Dialog open={regenerateModalOpen} onOpenChange={setRegenerateModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-w-[calc(100%-2rem)] mx-auto">
           <DialogHeader>
             <DialogTitle>Regenerate Preview</DialogTitle>
             <DialogDescription>
@@ -918,34 +1071,28 @@ export default function EditorPage() {
       <Card className="border-gray-200 shadow-sm">
         <CardContent className="p-0">
           <Tabs defaultValue="split" className="w-full" onValueChange={(value: string) => setPreviewMode(value as "edit" | "split" | "preview")}>
-            <div className="border-b border-gray-200">
-              <TabsList className="w-full bg-gray-50 p-0 rounded-none flex">
-                <TabsTrigger 
-                  value="edit"
-                  className="flex-1 data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:shadow-none py-3 rounded-none"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    Edit Mode
-                  </span>
+            <div className="mb-4 px-4 pt-4">
+              <TabsList>
+                <TabsTrigger value="edit" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  Edit Mode
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="split" 
-                  className="flex-1 data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:shadow-none py-3 rounded-none"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line></svg>
-                    Split Mode
-                  </span>
+                <TabsTrigger value="split" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="12" y1="3" x2="12" y2="21"></line>
+                  </svg>
+                  Split Mode
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="preview" 
-                  className="flex-1 data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:shadow-none py-3 rounded-none"
-                >
-                  <span className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                    Preview Mode
-                  </span>
+                <TabsTrigger value="preview" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  Preview Mode
                 </TabsTrigger>
               </TabsList>
             </div>

@@ -18,7 +18,7 @@ export default function Home() {
           </p>
         </div>
         <div className="mt-8 space-y-4">
-          <Button asChild className="w-full py-6 text-lg">
+          <Button asChild className="w-full bg-black hover:bg-gray-800 text-white py-6 text-lg">
             <Link href="/blog">
               Create New Blog Post
             </Link>
