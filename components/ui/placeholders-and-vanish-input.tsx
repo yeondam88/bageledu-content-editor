@@ -84,7 +84,7 @@ export function PlaceholdersAndVanishInput({
             onChange && onChange(e);
           }}
           placeholder={placeholder}
-          className="w-full bg-white dark:bg-[#1c1c1c] backdrop-blur-sm rounded-full border border-gray-200 dark:border-[#444] pl-4 pr-14 py-3 outline-none focus:ring-2 ring-indigo-600 text-sm sm:text-base"
+          className="w-full bg-white dark:bg-[#1c1c1c] backdrop-blur-sm rounded-full border border-gray-200 dark:border-[#444] pl-4 pr-14 py-3 outline-none focus:ring-2 ring-indigo-600 text-base"
         />
         <div className="absolute inset-y-0 right-1 flex items-center">
           <Button
