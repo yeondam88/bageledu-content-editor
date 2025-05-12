@@ -67,12 +67,14 @@ export default function BlogPage() {
   };
   
   const [rawMarkdown, setRawMarkdown] = useState<string>("");
+  const [editingMarkdown, setEditingMarkdown] = useState<string>("");
   const [editMode, setEditMode] = useState(false);
   const [existingPosts, setExistingPosts] = useState<any[]>([]);
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [bypassOpenAI, setBypassOpenAI] = useState(false);
   const [showRawMarkdown, setShowRawMarkdown] = useState(false);
+  const [activeLanguage, setActiveLanguage] = useState<"en" | "ko">("en");
   
   const imageInputRef = useRef<HTMLInputElement>(null);
   const formValues = watch();
@@ -136,6 +138,9 @@ export default function BlogPage() {
     if (post.image) {
       setImageUrl(post.image);
     }
+    
+    // Set active language to English by default
+    setActiveLanguage("en");
     
     // Handle missing Korean title by extracting from raw content if needed
     let titleKo = post.titleKo || "";
@@ -233,6 +238,7 @@ export default function BlogPage() {
     
     // Set raw markdown
     setRawMarkdown(post.rawContent || "");
+    setEditingMarkdown(post.rawContent || "");
     
     // Debug what was loaded
     console.log("Blog: Set post data:", {
@@ -269,6 +275,9 @@ export default function BlogPage() {
     
     setAiLoading(true);
     try {
+      // Show which language is being used for content generation
+      console.log(`Blog: Generating preview in ${activeLanguage === "en" ? "English" : "Korean"} mode`);
+      
       // First, try to upload the image if there is one
       let previewImageUrl = imageUrl;
       
@@ -527,6 +536,7 @@ ${contentKo}
         });
         
         setRawMarkdown(newMarkdown);
+        setEditingMarkdown(newMarkdown);
         showNotification("Content has been updated. Check the preview tab.", "success");
       } else {
         // Generate preview with OpenAI
@@ -542,7 +552,9 @@ ${contentKo}
             category: formValues.category,
             tags: formValues.tags,
             author: formValues.author,
-            imageUrl: previewImageUrl // Use the uploaded image URL
+            imageUrl: previewImageUrl, // Use the uploaded image URL
+            language: activeLanguage, // Add the active language
+            preservedContent: preserveContentInBothLanguages() // Preserve content in both languages
           }),
         });
         
@@ -556,6 +568,7 @@ ${contentKo}
           setPreview(ensureCompletePreview(data.parsed));
           if (data.markdown) {
             setRawMarkdown(data.markdown);
+            setEditingMarkdown(data.markdown);
           }
           showNotification("Bilingual content has been generated. Review it in the preview tab before publishing.", "success");
         }
@@ -565,6 +578,58 @@ ${contentKo}
     } finally {
       setAiLoading(false);
     }
+  };
+
+  // Toggle between English and Korean content for editing
+  const toggleEditLanguage = () => {
+    if (!selectedPost || !preview) return;
+    
+    // Toggle the active language
+    const newLanguage = activeLanguage === "en" ? "ko" : "en";
+    setActiveLanguage(newLanguage);
+    
+    // Update form values based on selected language
+    if (newLanguage === "en") {
+      setValue("title", preview.titleEn || selectedPost.titleEn || "");
+      setValue("content", preview.contentEn || selectedPost.contentEn || "");
+      showNotification("Switched to English content", "default");
+    } else {
+      setValue("title", preview.titleKo || selectedPost.titleKo || "");
+      setValue("content", preview.contentKo || selectedPost.contentKo || "");
+      showNotification("Switched to Korean content", "default");
+    }
+    
+    console.log(`Blog: Switched to ${newLanguage === "en" ? "English" : "Korean"} editing mode`);
+  };
+  
+  // Function to preserve content in both languages when generating preview
+  const preserveContentInBothLanguages = () => {
+    // If we have a preview already, preserve the content in the non-active language
+    if (preview) {
+      if (activeLanguage === "en") {
+        // We're editing English, preserve Korean content
+        return {
+          titleEn: formValues.title,
+          contentEn: formValues.content,
+          titleKo: preview.titleKo || "",
+          contentKo: preview.contentKo || "",
+          excerptEn: preview.excerptEn || "",
+          excerptKo: preview.excerptKo || ""
+        };
+      } else {
+        // We're editing Korean, preserve English content
+        return {
+          titleEn: preview.titleEn || "",
+          contentEn: preview.contentEn || "",
+          titleKo: formValues.title,
+          contentKo: formValues.content,
+          excerptEn: preview.excerptEn || "",
+          excerptKo: preview.excerptKo || ""
+        };
+      }
+    }
+    
+    return null;
   };
 
   // Submit the form
@@ -679,7 +744,9 @@ ${contentKo}
           category: data.category,
           tags: data.tags,
           imageUrl: uploadedImageUrl,
-          parsed: preview
+          parsed: preview,
+          language: activeLanguage, // Add the active language
+          preservedContent: preserveContentInBothLanguages() // Preserve content in both languages
         }),
       });
       
@@ -698,7 +765,7 @@ ${contentKo}
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          markdown: generatedData.markdown,
+          markdown: showRawMarkdown ? rawMarkdown : generatedData.markdown,
           path: filePath,
           message: `docs: ${editMode ? 'update' : 'add'} post '${data.title}'`,
         }),
@@ -752,6 +819,7 @@ ${contentKo}
     setImageUrl("");
     setPreview(null);
     setRawMarkdown("");
+    setEditingMarkdown("");
   };
 
   // Add a function to handle post deletion
@@ -801,7 +869,64 @@ ${contentKo}
   // Direct submit without going through the preview step (for when preview already exists)
   const handleSubmitDirectly = async () => {
     if (preview) {
-      await handleSubmit(onSubmit)();
+      // If we're editing the raw markdown directly, use that instead of generating new markdown
+      if (showRawMarkdown) {
+        setLoading(true);
+        try {
+          // Use current form values directly instead of trying to get them from handleSubmit
+          const currentTitle = watch('title');
+          
+          // Create the slug based on the title or use the existing one
+          const slug = editMode && selectedPost ? selectedPost.name.replace('.md', '') : slugify(preview.titleEn || currentTitle);
+          const filePath = `src/content/blog/${slug}.md`;
+          
+          // Submit the edited markdown directly
+          const githubResponse = await fetch("/api/github", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              markdown: rawMarkdown,
+              path: filePath,
+              message: `docs: ${editMode ? 'update' : 'add'} post '${currentTitle}'`,
+            }),
+          });
+          
+          if (!githubResponse.ok) {
+            let errorMessage = "GitHub commit failed";
+            try {
+              const errorData = await githubResponse.json();
+              errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+              errorMessage = `GitHub API error: ${githubResponse.status}`;
+            }
+            throw new Error(errorMessage);
+          }
+          
+          setSuccess(true);
+          showNotification(`Your blog post has been ${editMode ? 'updated' : 'published'}.`, "success");
+          
+          // Reset state
+          reset();
+          setImageUrl("");
+          setPreview(null);
+          setEditMode(false);
+          setSelectedPost(null);
+          setRawMarkdown("");
+          setEditingMarkdown("");
+          if (imageInputRef.current) imageInputRef.current.value = "";
+          
+          // Refresh the posts list
+          fetchExistingPosts();
+        } catch (error: any) {
+          setError(error.message || "An error occurred");
+          showNotification(error.message || "Failed to publish your post", "error");
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Use the normal submission flow
+        await handleSubmit(onSubmit)();
+      }
     } else {
       showNotification("Please generate a preview first before publishing.", "error");
     }
@@ -984,6 +1109,7 @@ ${contentKo}
                   setImageUrl("");
                   setPreview(null);
                   setRawMarkdown("");
+                  setEditingMarkdown("");
                 }}
                 variant="outline"
                 className="bg-white hover:bg-gray-50 text-black font-medium border border-gray-200 hover:border-gray-300 shadow-sm transition-all w-1/2 sm:w-auto flex items-center gap-2"
@@ -1091,16 +1217,50 @@ ${contentKo}
             <TabsContent value="edit" className="focus-visible:outline-none focus-visible:ring-0">
               <Card className="border-gray-200 shadow-sm">
                 <CardContent className="p-6">
+                <div className="flex justify-end">
+                    {editMode && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={toggleEditLanguage}
+                              className="flex items-center gap-1 border-gray-200 px-3 py-1 h-8 text-sm"
+                            >
+                              {activeLanguage === "en" ? (
+                                <>
+                                  <span className="mr-1">🇺🇸</span> Edit in English
+                                </>
+                              ) : (
+                                <>
+                                  <span className="mr-1">🇰🇷</span> Edit in Korean
+                                </>
+                              )}
+                            </Button>
+                          )}
+                    </div>
                   <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    
                       <div className="space-y-2">
-                        <Label htmlFor="title" className="font-medium">Title</Label>
-                        <Input
-                          id="title"
-                          placeholder="Post title..."
-                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                          {...register("title", { required: true })}
-                        />
+                        <div className="flex justify-between items-center">
+                          <Label htmlFor="title" className="font-medium">Title</Label>
+                          
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="title"
+                            placeholder="Post title..."
+                            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            {...register("title", { required: true })}
+                          />
+                          {editMode && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <span className="text-xs text-gray-400">
+                                {activeLanguage === "en" ? "🇺🇸" : "🇰🇷"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         {errors.title && <span className="text-red-500 text-sm">Required</span>}
                       </div>
                       
@@ -1142,13 +1302,22 @@ ${contentKo}
                     
                     <div className="space-y-2">
                       <Label htmlFor="content" className="font-medium">Blog Post Content</Label>
-                      <Textarea
-                        id="content"
-                        placeholder="Your content in markdown..."
-                        rows={12}
-                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[200px] font-mono text-sm"
-                        {...register("content", { required: true })}
-                      />
+                      <div className="relative">
+                        <Textarea
+                          id="content"
+                          placeholder="Your content in markdown..."
+                          rows={12}
+                          className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[200px] font-mono text-sm"
+                          {...register("content", { required: true })}
+                        />
+                        {editMode && (
+                          <div className="absolute right-3 top-3">
+                            <Badge className={`${activeLanguage === "en" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"}`}>
+                              {activeLanguage === "en" ? "Editing in English" : "Editing in Korean"}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
                       {errors.content && <span className="text-red-500 text-sm">Required</span>}
                     </div>
                     
@@ -1193,6 +1362,18 @@ ${contentKo}
                           </div>
                         </label>
                       </div>
+                      
+                      {editMode && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-md text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                          </svg>
+                          <span>Editing {activeLanguage === "en" ? "English" : "Korean"} version</span>
+                        </div>
+                      )}
+                      
                       <div className="flex-1"></div>
                       <Button
                         onClick={generatePreview}
@@ -1305,9 +1486,68 @@ ${contentKo}
                       {/* Preview content */}
                       {showRawMarkdown ? (
                         <div className="border rounded-md p-4 bg-gray-50">
-                          <pre className="text-sm font-mono whitespace-pre-wrap overflow-x-auto">
-                            {rawMarkdown}
-                          </pre>
+                          <div className="mb-4 flex justify-between items-center">
+                            <h3 className="font-medium text-gray-700">Raw Markdown</h3>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Apply markdown changes
+                                if (editingMarkdown !== rawMarkdown) {
+                                  setRawMarkdown(editingMarkdown);
+                                  showNotification("Markdown changes applied", "success");
+                                  
+                                  // Try to extract title and content from markdown to update the preview
+                                  try {
+                                    // Create a basic parser to extract content from markdown
+                                    const enContentMatch = editingMarkdown.match(/<div class="en-content"[^>]*>([\s\S]*?)<\/div>/);
+                                    const koContentMatch = editingMarkdown.match(/<div class="ko-content"[^>]*>([\s\S]*?)<\/div>/);
+                                    
+                                    const titleEnMatch = editingMarkdown.match(/title:\s*\n\s*en:\s*['"]([^'"]*)['"]/);
+                                    const titleKoMatch = editingMarkdown.match(/title:\s*\n\s*ko:\s*['"]([^'"]*)['"]/);
+                                    
+                                    const excerptEnMatch = editingMarkdown.match(/excerpt:\s*\n\s*en:\s*['"]([^'"]*)['"]/);
+                                    const excerptKoMatch = editingMarkdown.match(/excerpt:\s*\n\s*ko:\s*['"]([^'"]*)['"]/);
+                                    
+                                    if (preview && (enContentMatch || koContentMatch || titleEnMatch || titleKoMatch)) {
+                                      const updatedPreview = { ...preview };
+                                      
+                                      if (titleEnMatch && titleEnMatch[1]) updatedPreview.titleEn = titleEnMatch[1];
+                                      if (titleKoMatch && titleKoMatch[1]) updatedPreview.titleKo = titleKoMatch[1];
+                                      if (excerptEnMatch && excerptEnMatch[1]) updatedPreview.excerptEn = excerptEnMatch[1];
+                                      if (excerptKoMatch && excerptKoMatch[1]) updatedPreview.excerptKo = excerptKoMatch[1];
+                                      
+                                      if (enContentMatch && enContentMatch[1]) {
+                                        let content = enContentMatch[1].trim();
+                                        // Remove h1 tag if present
+                                        content = content.replace(/<h1>.*?<\/h1>\s*/i, '');
+                                        updatedPreview.contentEn = content;
+                                      }
+                                      
+                                      if (koContentMatch && koContentMatch[1]) {
+                                        let content = koContentMatch[1].trim();
+                                        // Remove h1 tag if present
+                                        content = content.replace(/<h1>.*?<\/h1>\s*/i, '');
+                                        updatedPreview.contentKo = content;
+                                      }
+                                      
+                                      setPreview(updatedPreview);
+                                    }
+                                  } catch (error) {
+                                    console.error("Error parsing markdown:", error);
+                                  }
+                                }
+                              }}
+                              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                            >
+                              Apply Changes
+                            </Button>
+                          </div>
+                          <Textarea 
+                            value={editingMarkdown}
+                            onChange={(e) => setEditingMarkdown(e.target.value)}
+                            className="text-sm font-mono whitespace-pre-wrap h-[500px] overflow-y-auto resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          />
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
