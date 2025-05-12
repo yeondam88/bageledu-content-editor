@@ -8,7 +8,19 @@ import { TextShimmer } from "@/components/ui/text-shimmer";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { Sparkles, User, MessageCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSession } from "next-auth/react";
 
+// Extend the Session type to include our custom properties
+declare module "next-auth" {
+  interface Session {
+    user: {
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      isAuthorized?: boolean;
+    }
+  }
+}
 
 type Message = {
   role: 'user' | 'assistant';
@@ -35,11 +47,10 @@ export default function AIChatAssistant({
   placeholder = "Ask for writing help or ideas...",
   compact = false
 }: AIChatAssistantProps) {
+  const { data: session } = useSession();
   const [prompt, setPrompt] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: initialMessage, timestamp: new Date() }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
@@ -58,6 +69,43 @@ export default function AIChatAssistant({
   const formatTime = (date: Date): string => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  // Initialize messages when chat opens or session changes
+  useEffect(() => {
+    if (isChatOpen) {
+      // Check if user is authorized
+      const isAuthorized = session?.user?.isAuthorized;
+      
+      if (isAuthorized === false) {
+        // User is logged in but not authorized
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: "You are currently signed in, but your account is not authorized to use the AI assistant. Please contact the administrator for access.", 
+            timestamp: new Date() 
+          }
+        ]);
+      } else if (!session) {
+        // User is not logged in
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: "Please sign in to use the AI assistant.", 
+            timestamp: new Date() 
+          }
+        ]);
+      } else {
+        // User is authorized
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: initialMessage, 
+            timestamp: new Date() 
+          }
+        ]);
+      }
+    }
+  }, [isChatOpen, session, initialMessage]);
 
   // Check if the device is mobile on component mount and when window resizes
   useEffect(() => {
@@ -129,6 +177,19 @@ export default function AIChatAssistant({
   const handleSend = async () => {
     if (!prompt.trim()) return;
     
+    // If user is not authorized, show message
+    if (session?.user?.isAuthorized === false) {
+      setMessages([
+        { 
+          role: 'assistant', 
+          content: "You are not authorized to use the AI assistant. Please contact the administrator for access.", 
+          timestamp: new Date() 
+        }
+      ]);
+      setPrompt("");
+      return;
+    }
+    
     // If onSend prop is provided, use that instead
     if (onSend) {
       onSend(prompt);
@@ -171,7 +232,7 @@ export default function AIChatAssistant({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get a response from the AI assistant");
+        throw new Error(`${response.status}: ${response.statusText}`);
       }
 
       // Get and process the response
@@ -194,11 +255,20 @@ export default function AIChatAssistant({
       }
     } catch (error: any) {
       // Handle errors gracefully
+      let errorMessage = "Sorry, I couldn't process your request. Please try again later.";
+      
+      // Check for authorization errors
+      if (error.message && error.message.includes("403")) {
+        errorMessage = "You are not authorized to use the AI assistant. Please contact the administrator for access.";
+      } else if (error.message && error.message.includes("429")) {
+        errorMessage = "You're sending messages too quickly. Please wait a moment before trying again.";
+      }
+      
       setMessages(prev => [
         ...prev, 
         { 
           role: 'assistant', 
-          content: `Sorry, I encountered an error: ${error.message || "Unknown error"}`,
+          content: errorMessage,
           timestamp: new Date()
         }
       ]);

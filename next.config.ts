@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
     // your project has TypeScript errors.
     ignoreBuildErrors: true,
   },
+  images: {
+    domains: ['www.bageledu.com', 'bageledu.com', 'bageledu.sfo3.cdn.digitaloceanspaces.com'],
+  },
 };
 
 export default nextConfig;

@@ -18,6 +18,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Check if the user is authorized (has the isAuthorized flag from NextAuth)
+  if (!session.user?.isAuthorized) {
+    console.log(`Unauthorized API request attempt from: ${session.user?.email}`);
+    return NextResponse.json(
+      { error: "You are not authorized to access this feature" }, 
+      { status: 403 }
+    );
+  }
+
   try {
     // Read the request body once and store it
     const requestData = await req.json();
@@ -46,7 +55,7 @@ export async function POST(req: NextRequest) {
     // Check if user has recently made an API request
     const lastRequestTime = requestTimes[requestTimeKey] || 0;
     const now = Date.now();
-    const cooldownPeriod = 2000; // 2 seconds between requests
+    const cooldownPeriod = 2000;
     
     if (now - lastRequestTime < cooldownPeriod) {
       return NextResponse.json(
@@ -738,7 +747,7 @@ tags:
     }
 
     return NextResponse.json(
-      { error: error.message || "Error generating content" },
+      { error: error.message || "An error occurred" },
       { status: 500 }
     );
   }
