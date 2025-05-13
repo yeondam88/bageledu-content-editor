@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 
-export default function SignIn() {
+function SignInContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
   const [email, setEmail] = useState("");
@@ -91,5 +91,26 @@ export default function SignIn() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 px-4">
+        <Card className="w-full max-w-md shadow-xl border-0">
+          <div className="flex justify-center pt-6 pb-2">
+            <div className="bg-gray-100 rounded-full p-4 w-16 h-16 flex items-center justify-center">
+              <div className="w-8 h-8 bg-black rounded-full"></div>
+            </div>
+          </div>
+          <CardHeader className="text-center space-y-1 pt-2 pb-4">
+            <CardTitle className="text-2xl font-semibold">Loading...</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
   );
 } 
