@@ -72,7 +72,7 @@ export default function AIChatAssistant({
 
   // Initialize messages when chat opens or session changes
   useEffect(() => {
-    if (isChatOpen) {
+    if (isChatOpen && messages.length === 0) {
       // Check if user is authorized
       const isAuthorized = session?.user?.isAuthorized;
       
@@ -105,7 +105,7 @@ export default function AIChatAssistant({
         ]);
       }
     }
-  }, [isChatOpen, session, initialMessage]);
+  }, [isChatOpen, session, initialMessage, messages.length]);
 
   // Check if the device is mobile on component mount and when window resizes
   useEffect(() => {
@@ -176,6 +176,7 @@ export default function AIChatAssistant({
   // Handle sending a message
   const handleSend = async () => {
     if (!prompt.trim()) return;
+    console.log(session?.user?.isAuthorized);
     
     // If user is not authorized, show message
     if (session?.user?.isAuthorized === false) {
