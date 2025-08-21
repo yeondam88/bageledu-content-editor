@@ -25,8 +25,6 @@ function slugify(text: string) {
 }
 
 function generateMarkdown(data: any, imageUrl: string) {
-  console.log("generateMarkdown called with imageUrl:", imageUrl);
-  
   if (!data) return "";
   const tagsArr = (data.tags || "").split(",").map((t: string) => t.trim()).filter(Boolean);
   
@@ -582,64 +580,37 @@ export default function EditorPage() {
       // 1. Upload image
       let uploadedImageUrl = imageUrl;
       if (data.image && data.image[0]) {
-        console.log("Image file found, preparing for upload:", {
-          name: data.image[0].name,
-          type: data.image[0].type,
-          size: data.image[0].size + " bytes"
-        });
-        
         // Directly verify the File object
         const file = data.image[0] as File;
         if (!(file instanceof File)) {
-          console.error("Not a valid File object!", typeof file);
           throw new Error("Image is not a valid File object");
         }
-        
+
         const formData = new FormData();
         formData.append("image", file);
-        console.log("FormData created with image");
-        
-        // Verify the FormData content
-        console.log("FormData entries:");
-        for (const [key, value] of formData.entries()) {
-          console.log(`- ${key}: ${value instanceof File ? `File(${value.name}, ${value.type}, ${value.size} bytes)` : value}`);
-        }
-        
+
         try {
-          console.log("Sending upload request to /api/upload...");
           const uploadRes = await fetch("/api/upload", {
             method: "POST",
             body: formData,
           });
-          
-          console.log("Upload response status:", uploadRes.status);
+
           if (!uploadRes.ok) {
             const errorText = await uploadRes.text();
-            console.error("Upload failed:", errorText);
             throw new Error(`Image upload failed: ${uploadRes.status} ${errorText}`);
           }
-          
+
           const uploadJson = await uploadRes.json();
-          console.log("Upload successful, received URL:", uploadJson.url);
           uploadedImageUrl = uploadJson.url;
           setImageUrl(uploadedImageUrl);
         } catch (uploadError: any) {
-          console.error("Upload request error:", uploadError);
           throw new Error("Image upload request failed: " + (uploadError.message || "Unknown error"));
         }
-      } else {
-        console.log("No image file to upload, using existing URL:", uploadedImageUrl);
-      }
       // 2. Generate markdown
       const slug = slugify(data.title_en);
       const filePath = `src/content/blog/${slug}.md`;
       const tagsArr = data.tags.split(",").map((t: string) => t.trim()).filter(Boolean);
       const markdown = generateMarkdown(data, uploadedImageUrl);
-      
-      // Debug: Check if image URL is in the markdown
-      console.log("Generated markdown with image URL:", uploadedImageUrl);
-      const imageLineMatch = markdown.match(/image:\s*\n\s*src:\s*'([^']*)'/);
-      console.log("Image URL in markdown:", imageLineMatch ? imageLineMatch[1] : "Not found");
       
       // 3. Commit to GitHub
       const commitRes = await fetch("/api/github", {
@@ -828,17 +799,7 @@ export default function EditorPage() {
             {...register("image", { required: !imageUrl })}
             ref={imageInputRef}
             onChange={(e) => {
-              // Log file selection details
-              if (e.target.files && e.target.files[0]) {
-                const file = e.target.files[0];
-                console.log("File selected:", {
-                  name: file.name,
-                  type: file.type,
-                  size: file.size + " bytes"
-                });
-              } else {
-                console.log("No file selected");
-              }
+              // File selection handled
             }}
           />
           {errors.image && <span className="text-red-500 text-sm">Required</span>}
@@ -961,27 +922,22 @@ export default function EditorPage() {
       
       if (!previewImageUrl && imageInputRef.current?.files?.length) {
         try {
-          console.log("Found image file for preview, attempting upload");
           const formData = new FormData();
           formData.append("image", imageInputRef.current.files[0]);
-          
+
           const uploadRes = await fetch("/api/upload", {
             method: "POST",
             body: formData,
           });
-          
+
           if (!uploadRes.ok) {
-            const errorText = await uploadRes.text();
-            console.error("Image upload for preview failed:", errorText);
             // Continue without image if upload fails
           } else {
             const uploadJson = await uploadRes.json();
-            console.log("Preview image uploaded successfully:", uploadJson.url);
             previewImageUrl = uploadJson.url;
             setImageUrl(previewImageUrl); // Save the URL for later use
           }
         } catch (uploadError: any) {
-          console.error("Preview image upload error:", uploadError);
           // Continue preview generation even if image upload fails
         }
       }

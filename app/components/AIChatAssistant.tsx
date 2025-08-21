@@ -18,12 +18,12 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       isAuthorized?: boolean;
-    }
+    };
   }
 }
 
 type Message = {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp?: Date;
 };
@@ -45,7 +45,7 @@ export default function AIChatAssistant({
   onSend,
   loading = false,
   placeholder = "Ask for writing help or ideas...",
-  compact = false
+  compact = false,
 }: AIChatAssistantProps) {
   const { data: session } = useSession();
   const [prompt, setPrompt] = useState("");
@@ -55,11 +55,11 @@ export default function AIChatAssistant({
   const [startTime, setStartTime] = useState<number | null>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  
+
   const placeholders = [
     "Help me with college application ideas...",
     "Suggest topics for my education blog...",
-    "Tips for writing a scholarship application..."
+    "Tips for writing a scholarship application...",
   ];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -67,7 +67,7 @@ export default function AIChatAssistant({
 
   // Format time to display in a user-friendly way
   const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   // Initialize messages when chat opens or session changes
@@ -75,33 +75,34 @@ export default function AIChatAssistant({
     if (isChatOpen && messages.length === 0) {
       // Check if user is authorized
       const isAuthorized = session?.user?.isAuthorized;
-      
+
       if (isAuthorized === false) {
         // User is logged in but not authorized
         setMessages([
-          { 
-            role: 'assistant', 
-            content: "You are currently signed in, but your account is not authorized to use the AI assistant. Please contact the administrator for access.", 
-            timestamp: new Date() 
-          }
+          {
+            role: "assistant",
+            content:
+              "You are currently signed in, but your account is not authorized to use the AI assistant. Please contact the administrator for access.",
+            timestamp: new Date(),
+          },
         ]);
       } else if (!session) {
         // User is not logged in
         setMessages([
-          { 
-            role: 'assistant', 
-            content: "Please sign in to use the AI assistant.", 
-            timestamp: new Date() 
-          }
+          {
+            role: "assistant",
+            content: "Please sign in to use the AI assistant.",
+            timestamp: new Date(),
+          },
         ]);
       } else {
         // User is authorized
         setMessages([
-          { 
-            role: 'assistant', 
-            content: initialMessage, 
-            timestamp: new Date() 
-          }
+          {
+            role: "assistant",
+            content: initialMessage,
+            timestamp: new Date(),
+          },
         ]);
       }
     }
@@ -112,27 +113,27 @@ export default function AIChatAssistant({
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     // Check initially
     checkIfMobile();
-    
+
     // Add resize listener
-    window.addEventListener('resize', checkIfMobile);
-    
+    window.addEventListener("resize", checkIfMobile);
+
     // Clean up
-    return () => window.removeEventListener('resize', checkIfMobile);
+    return () => window.removeEventListener("resize", checkIfMobile);
   }, []);
 
   // Add body class to prevent scrolling when chat is open on mobile
   useEffect(() => {
     if (isMobile && isChatOpen) {
-      document.body.classList.add('overflow-hidden');
+      document.body.classList.add("overflow-hidden");
     } else {
-      document.body.classList.remove('overflow-hidden');
+      document.body.classList.remove("overflow-hidden");
     }
-    
+
     return () => {
-      document.body.classList.remove('overflow-hidden');
+      document.body.classList.remove("overflow-hidden");
     };
   }, [isMobile, isChatOpen]);
 
@@ -148,77 +149,82 @@ export default function AIChatAssistant({
   // Handle Escape key press to close chat
   useEffect(() => {
     const handleEscapeKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isChatOpen) {
+      if (e.key === "Escape" && isChatOpen) {
         setIsChatOpen(false);
       }
     };
-    
-    document.addEventListener('keydown', handleEscapeKey);
+
+    document.addEventListener("keydown", handleEscapeKey);
     return () => {
-      document.removeEventListener('keydown', handleEscapeKey);
+      document.removeEventListener("keydown", handleEscapeKey);
     };
   }, [isChatOpen]);
 
   // Handle clicking outside to close chat on desktop
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (isChatOpen && chatRef.current && !chatRef.current.contains(e.target as Node) && !isMobile) {
+      if (
+        isChatOpen &&
+        chatRef.current &&
+        !chatRef.current.contains(e.target as Node) &&
+        !isMobile
+      ) {
         setIsChatOpen(false);
       }
     };
-    
-    document.addEventListener('mousedown', handleClickOutside);
+
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isChatOpen, isMobile]);
 
   // Handle sending a message
   const handleSend = async () => {
     if (!prompt.trim()) return;
-    console.log(session?.user?.isAuthorized);
-    
+
     // If user is not authorized, show message
     if (session?.user?.isAuthorized === false) {
       setMessages([
-        { 
-          role: 'assistant', 
-          content: "You are not authorized to use the AI assistant. Please contact the administrator for access.", 
-          timestamp: new Date() 
-        }
+        {
+          role: "assistant",
+          content:
+            "You are not authorized to use the AI assistant. Please contact the administrator for access.",
+          timestamp: new Date(),
+        },
       ]);
       setPrompt("");
       return;
     }
-    
+
     // If onSend prop is provided, use that instead
     if (onSend) {
       onSend(prompt);
       setPrompt("");
       return;
     }
-    
+
     // Add user message to the chat
-    const userMessage: Message = { 
-      role: 'user', 
+    const userMessage: Message = {
+      role: "user",
       content: prompt,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
-    setMessages(prev => [...prev, userMessage]);
-    
+    setMessages((prev) => [...prev, userMessage]);
+
     // Clear input field
     const userQuery = prompt;
     setPrompt("");
-    
+
     // Show loading state and record start time
     setChatLoading(true);
     setStartTime(Date.now());
     setResponseTime(null);
-    
+
     try {
       // Get conversation history (last 10 messages or fewer)
       const conversationHistory = messages.slice(-10);
-      
+
       // Call the API
       const response = await fetch("/api/openai", {
         method: "POST",
@@ -228,7 +234,7 @@ export default function AIChatAssistant({
         body: JSON.stringify({
           prompt: userQuery,
           type: "chat_assistant",
-          conversation: conversationHistory
+          conversation: conversationHistory,
         }),
       });
 
@@ -238,40 +244,46 @@ export default function AIChatAssistant({
 
       // Get and process the response
       const data = await response.json();
-      
+
       // Calculate response time
       if (startTime) {
         setResponseTime(Date.now() - startTime);
       }
-      
+
       if (data.response) {
         // Add assistant response to the chat
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: data.response,
-          timestamp: new Date()
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.response,
+            timestamp: new Date(),
+          },
+        ]);
       } else {
         throw new Error("Invalid response from the assistant");
       }
     } catch (error: any) {
       // Handle errors gracefully
-      let errorMessage = "Sorry, I couldn't process your request. Please try again later.";
-      
+      let errorMessage =
+        "Sorry, I couldn't process your request. Please try again later.";
+
       // Check for authorization errors
       if (error.message && error.message.includes("403")) {
-        errorMessage = "You are not authorized to use the AI assistant. Please contact the administrator for access.";
+        errorMessage =
+          "You are not authorized to use the AI assistant. Please contact the administrator for access.";
       } else if (error.message && error.message.includes("429")) {
-        errorMessage = "You're sending messages too quickly. Please wait a moment before trying again.";
+        errorMessage =
+          "You're sending messages too quickly. Please wait a moment before trying again.";
       }
-      
-      setMessages(prev => [
-        ...prev, 
-        { 
-          role: 'assistant', 
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
           content: errorMessage,
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       ]);
     } finally {
       setChatLoading(false);
@@ -305,56 +317,59 @@ export default function AIChatAssistant({
   // Chat window animation variants
   const chatVariants = {
     hidden: { opacity: 0, y: 50, scale: 0.95 },
-    visible: { 
-      opacity: 1, 
-      y: 0, 
+    visible: {
+      opacity: 1,
+      y: 0,
       scale: 1,
-      transition: { 
-        type: "spring", 
-        damping: 25, 
-        stiffness: 300 
-      }
+      transition: {
+        type: "spring",
+        damping: 25,
+        stiffness: 300,
+      },
     },
-    exit: { 
-      opacity: 0, 
-      y: 30, 
+    exit: {
+      opacity: 0,
+      y: 30,
       scale: 0.95,
-      transition: { 
-        duration: 0.2 
-      }
-    }
+      transition: {
+        duration: 0.2,
+      },
+    },
   };
 
   // Button animation variants
   const buttonVariants = {
     hidden: { scale: 0, opacity: 0 },
-    visible: { 
-      scale: 1, 
+    visible: {
+      scale: 1,
       opacity: 1,
-      transition: { 
-        type: "spring", 
-        damping: 20, 
+      transition: {
+        type: "spring",
+        damping: 20,
         stiffness: 300,
-        delay: 0.1
-      }
+        delay: 0.1,
+      },
     },
-    exit: { 
-      scale: 0, 
+    exit: {
+      scale: 0,
       opacity: 0,
-      transition: { 
-        duration: 0.2 
-      } 
+      transition: {
+        duration: 0.2,
+      },
     },
     tap: {
-      scale: 0.95
+      scale: 0.95,
     },
     hover: {
-      scale: 1.05
-    }
+      scale: 1.05,
+    },
   };
 
   return (
-    <div className="fixed bottom-0 right-4 z-[9000]" style={{ pointerEvents: 'auto' }}>
+    <div
+      className="fixed bottom-0 right-4 z-[9000]"
+      style={{ pointerEvents: "auto" }}
+    >
       <AnimatePresence mode="wait">
         {isChatOpen ? (
           <React.Fragment key="chat-window">
@@ -364,12 +379,12 @@ export default function AIChatAssistant({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/30 z-[9050] transition-opacity duration-300" 
+                className="fixed inset-0 bg-black/30 z-[9050] transition-opacity duration-300"
                 onClick={() => setIsChatOpen(false)}
-                style={{ pointerEvents: 'auto' }}
+                style={{ pointerEvents: "auto" }}
               />
             )}
-            
+
             <motion.div
               ref={chatRef}
               variants={chatVariants}
@@ -377,64 +392,80 @@ export default function AIChatAssistant({
               animate="visible"
               exit="exit"
               className={`
-                ${isMobile 
-                  ? 'fixed inset-x-0 bottom-0 top-[30vh] sm:top-auto sm:max-h-[70vh] m-auto sm:m-4 z-[9100] max-w-[500px] rounded-t-xl rounded-b-none' 
-                  : 'w-[450px] h-[70vh] shadow-lg rounded-xl z-[9100]'
+                ${
+                  isMobile
+                    ? "fixed inset-x-0 bottom-0 top-[30vh] sm:top-auto sm:max-h-[70vh] m-auto sm:m-4 z-[9100] max-w-[500px] rounded-t-xl rounded-b-none"
+                    : "w-[450px] h-[70vh] shadow-lg rounded-xl z-[9100]"
                 }
                 bg-white shadow-xl flex flex-col
               `}
-              style={{ pointerEvents: 'auto' }}
+              style={{ pointerEvents: "auto" }}
             >
               {/* New style header with close button */}
               <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0 relative">
                 <div className="flex items-center font-medium">
-                  <span><Sparkles className="w-4 h-4 mr-2" /></span> 
+                  <span>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  </span>
                   BagelEdu AI Assistant
                 </div>
-                <motion.button 
+                <motion.button
                   onClick={() => setIsChatOpen(false)}
                   className="relative w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 z-[9200]"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
-                  style={{ pointerEvents: 'auto' }}
+                  style={{ pointerEvents: "auto" }}
                 >
                   <X className="h-4 w-4" />
                   <span className="sr-only">Close</span>
                 </motion.button>
               </div>
-              
+
               {/* Chat content area */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((msg, index) => (
                   <div key={index} className="flex flex-col mb-3">
-                    <div className={`flex items-start gap-2 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
+                    <div
+                      className={`flex items-start gap-2 ${
+                        msg.role === "assistant" ? "" : "flex-row-reverse"
+                      }`}
+                    >
                       {/* Avatar */}
                       <div className={`flex-shrink-0`}>
-                        <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
-                          msg.role === 'assistant' ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-50 text-indigo-600'
-                        }`}>
-                          {msg.role === 'assistant' 
-                            ? <Sparkles className="h-5 w-5" /> 
-                            : <User className="h-5 w-5" />
-                          }
+                        <div
+                          className={`h-9 w-9 rounded-full flex items-center justify-center ${
+                            msg.role === "assistant"
+                              ? "bg-indigo-100 text-indigo-600"
+                              : "bg-blue-50 text-indigo-600"
+                          }`}
+                        >
+                          {msg.role === "assistant" ? (
+                            <Sparkles className="h-5 w-5" />
+                          ) : (
+                            <User className="h-5 w-5" />
+                          )}
                         </div>
                       </div>
-                      
+
                       {/* Message bubble */}
-                      <div 
+                      <div
                         className={`${
-                          msg.role === 'assistant' 
-                            ? 'bg-gray-100 rounded-lg rounded-tl-none text-sm max-w-[85%]' 
-                            : 'bg-blue-50 rounded-lg rounded-tr-none text-sm max-w-[85%]'
+                          msg.role === "assistant"
+                            ? "bg-gray-100 rounded-lg rounded-tl-none text-sm max-w-[85%]"
+                            : "bg-blue-50 rounded-lg rounded-tr-none text-sm max-w-[85%]"
                         } py-3 px-4`}
                       >
-                        <p style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-                        
+                        <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
+
                         {/* Timestamp */}
                         {msg.timestamp && (
-                          <div className={`text-xs mt-1.5 text-right ${
-                            msg.role === 'assistant' ? 'text-gray-500' : 'text-blue-600/70'
-                          }`}>
+                          <div
+                            className={`text-xs mt-1.5 text-right ${
+                              msg.role === "assistant"
+                                ? "text-gray-500"
+                                : "text-blue-600/70"
+                            }`}
+                          >
                             {formatTime(msg.timestamp)}
                           </div>
                         )}
@@ -456,7 +487,7 @@ export default function AIChatAssistant({
                           <div className="h-2 w-2 rounded-full bg-gray-400"></div>
                           <div className="h-2 w-2 rounded-full bg-gray-400"></div>
                         </div>
-                        <TextShimmer className='font-mono text-sm' duration={1}>
+                        <TextShimmer className="font-mono text-sm" duration={1}>
                           Generating response...
                         </TextShimmer>
                       </div>
@@ -470,7 +501,7 @@ export default function AIChatAssistant({
                 )}
                 <div ref={messagesEndRef} />
               </div>
-              
+
               {/* Input area */}
               <div className="border-t flex-shrink-0 mt-auto">
                 <PlaceholdersAndVanishInput
@@ -483,7 +514,10 @@ export default function AIChatAssistant({
             </motion.div>
           </React.Fragment>
         ) : (
-          <div className="relative" style={{ pointerEvents: 'auto', zIndex: 9999 }}>
+          <div
+            className="relative"
+            style={{ pointerEvents: "auto", zIndex: 9999 }}
+          >
             <motion.div
               key="chat-button"
               variants={buttonVariants}
@@ -493,13 +527,13 @@ export default function AIChatAssistant({
               whileHover="hover"
               whileTap="tap"
               className="relative"
-              style={{ pointerEvents: 'auto', zIndex: 9999 }}
+              style={{ pointerEvents: "auto", zIndex: 9999 }}
             >
               <Button
                 onClick={() => setIsChatOpen(true)}
                 className="w-14 h-14 rounded-full shadow-md bg-black hover:bg-indigo-700"
                 size="icon"
-                style={{ pointerEvents: 'auto', zIndex: 9999 }}
+                style={{ pointerEvents: "auto", zIndex: 9999 }}
               >
                 <MessageCircle className="h-6 w-6" />
                 <span className="sr-only">Open Chat</span>
@@ -510,4 +544,4 @@ export default function AIChatAssistant({
       </AnimatePresence>
     </div>
   );
-} 
+}
