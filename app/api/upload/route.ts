@@ -28,32 +28,34 @@ export async function POST(req: NextRequest) {
     // Get the form data using the new FormData API
     const formData = await req.formData();
 
-    const file = formData.get("image") as File | null;
+    const file = formData.get("file") as File | null;
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // Validate file type - only allow images
+    // Validate file type - allow images and PDFs
     const allowedTypes = [
       "image/jpeg",
-      "image/png",
+      "image/png", 
       "image/gif",
       "image/webp",
       "image/svg+xml",
+      "application/pdf",
     ];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: "Only image files are allowed (jpg, png, gif, webp, svg)" },
+        { error: "Only image files (jpg, png, gif, webp, svg) and PDF files are allowed" },
         { status: 400 }
       );
     }
 
-    // Validate file size - max 5MB
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    // Validate file size - max 10MB for PDFs, 5MB for images
+    const maxSize = file.type === "application/pdf" ? 10 * 1024 * 1024 : 5 * 1024 * 1024; // 10MB for PDF, 5MB for images
     if (file.size > maxSize) {
+      const sizeLimit = file.type === "application/pdf" ? "10MB" : "5MB";
       return NextResponse.json(
-        { error: "File size exceeds the 5MB limit" },
+        { error: `File size exceeds the ${sizeLimit} limit` },
         { status: 400 }
       );
     }

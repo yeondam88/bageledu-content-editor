@@ -125,9 +125,17 @@ export default function ImageAssetsPage() {
     }
 
     setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => setPreviewImage(e.target?.result as string);
-    reader.readAsDataURL(file);
+
+    // Check if it's a PDF or other non-image file
+    if (file.type === "application/pdf") {
+      // Use a placeholder for PDFs
+      setPreviewImage("PDF_PLACEHOLDER");
+    } else {
+      // For images, read and display the actual file
+      const reader = new FileReader();
+      reader.onload = (e) => setPreviewImage(e.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   // Handle drag events
@@ -169,7 +177,7 @@ export default function ImageAssetsPage() {
     setUploadLoading(true);
     try {
       const formData = new FormData();
-      formData.append("image", selectedFile);
+      formData.append("file", selectedFile);
 
       const response = await fetch("/api/image-assets", {
         method: "POST",
@@ -356,7 +364,7 @@ export default function ImageAssetsPage() {
                     <Input
                       id="image"
                       type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      accept="image/jpeg,image/jpg,image/png,image/webp, application/pdf"
                       onChange={handleFileSelect}
                       ref={fileInputRef}
                       className={`border-2 border-dashed ${
@@ -431,7 +439,9 @@ export default function ImageAssetsPage() {
                       <div className="flex items-center gap-3">
                         <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                         <h3 className="font-medium text-gray-900">
-                          Image ready for optimization
+                          {selectedFile?.type === "application/pdf"
+                            ? "PDF ready for upload"
+                            : "Image ready for optimization"}
                         </h3>
                       </div>
                       <Button
@@ -452,11 +462,39 @@ export default function ImageAssetsPage() {
                       <div className="flex flex-col lg:flex-row gap-8">
                         <div className="flex-shrink-0">
                           <div className="relative group">
-                            <img
-                              src={previewImage}
-                              alt="Preview"
-                              className="max-w-80 max-h-80 object-contain border rounded-xl bg-white p-4 shadow-sm"
-                            />
+                            {previewImage === "PDF_PLACEHOLDER" ? (
+                              <div className="w-80 h-80 border rounded-xl bg-white p-8 shadow-sm flex items-center justify-center">
+                                <div className="text-center">
+                                  <svg
+                                    className="mx-auto h-24 w-24 text-red-500 mb-4"
+                                    fill="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                                    <text
+                                      x="12"
+                                      y="16"
+                                      textAnchor="middle"
+                                      className="text-xs font-bold fill-current"
+                                    >
+                                      PDF
+                                    </text>
+                                  </svg>
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    PDF Document
+                                  </h3>
+                                  <p className="text-sm text-gray-500">
+                                    {selectedFile?.name}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <img
+                                src={previewImage}
+                                alt="Preview"
+                                className="max-w-80 max-h-80 object-contain border rounded-xl bg-white p-4 shadow-sm"
+                              />
+                            )}
                             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 transition-opacity rounded-xl" />
                           </div>
                         </div>
@@ -551,12 +589,16 @@ export default function ImageAssetsPage() {
                   {uploadLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Processing...
+                      {selectedFile?.type === "application/pdf"
+                        ? "Uploading..."
+                        : "Processing..."}
                     </>
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload & Optimize
+                      {selectedFile?.type === "application/pdf"
+                        ? "Upload PDF"
+                        : "Upload & Optimize"}
                     </>
                   )}
                 </Button>
@@ -613,11 +655,23 @@ export default function ImageAssetsPage() {
                           </div>
                         </div>
                         <div className="ml-6">
-                          <img
-                            src={result.optimized[0]?.url || ""}
-                            alt="Optimized preview"
-                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 shadow-sm"
-                          />
+                          {result.original.format === "pdf" ? (
+                            <div className="w-20 h-20 bg-gray-50 rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+                              <svg
+                                className="h-8 w-8 text-red-500"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                              </svg>
+                            </div>
+                          ) : (
+                            <img
+                              src={result.optimized[0]?.url || ""}
+                              alt="Optimized preview"
+                              className="w-20 h-20 object-cover rounded-lg border border-gray-200 shadow-sm"
+                            />
+                          )}
                         </div>
                       </div>
                     </CardHeader>
@@ -845,12 +899,29 @@ export default function ImageAssetsPage() {
                         className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-gray-300 transition-colors duration-200"
                       >
                         <div className="aspect-square bg-gray-50 relative overflow-hidden">
-                          <img
-                            src={asset.url}
-                            alt={asset.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
+                          {asset.name.toLowerCase().endsWith(".pdf") ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="text-center">
+                                <svg
+                                  className="mx-auto h-16 w-16 text-red-500 mb-2"
+                                  fill="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                                </svg>
+                                <p className="text-xs text-gray-600 font-medium">
+                                  PDF
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <img
+                              src={asset.url}
+                              alt={asset.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          )}
                         </div>
                         <div className="p-5 space-y-4">
                           <div>

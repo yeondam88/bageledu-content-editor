@@ -4,6 +4,14 @@ import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 
+// Helper function to sanitize filenames for storage
+function sanitizeFileName(fileName: string): string {
+  return fileName
+    .replace(/[^a-zA-Z0-9.-]/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Check authentication
@@ -21,30 +29,40 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
 
     const formData = await req.formData();
-    const file = formData.get("image") as File;
+    const file = (formData.get("file") || formData.get("image")) as File;
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
     // Validate file type
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const allowedTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "image/svg+xml",
+      "application/pdf",
+    ];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
         {
           error:
-            "Invalid file type. Only JPEG, PNG, and WebP files are allowed.",
+            "Invalid file type. Only image files (JPEG, PNG, WebP, GIF, SVG) and PDF files are allowed.",
         },
         { status: 400 }
       );
     }
 
-    // Validate file size (20MB limit for processing)
-    const maxSize = 20 * 1024 * 1024; // 20MB in bytes
+    // Validate file size (20MB limit for processing, 10MB for PDFs)
+    const maxSize =
+      file.type === "application/pdf" ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
     if (file.size > maxSize) {
+      const sizeLimit = file.type === "application/pdf" ? "10MB" : "20MB";
       return NextResponse.json(
         {
-          error: "File too large. Maximum size is 20MB.",
+          error: `File too large. Maximum size is ${sizeLimit}.`,
         },
         { status: 400 }
       );
@@ -54,35 +72,27 @@ export async function POST(req: NextRequest) {
     const fileBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(fileBuffer);
 
-    // Get image dimensions and metadata
-    const metadata = await sharp(buffer).metadata();
+    const uploadResults: any[] = [];
+    let metadata = null;
 
-    // Determine optimal formats and sizes
-    const optimizedImages = await createOptimizedImages(
-      buffer,
-      file.name,
-      metadata
-    );
+    // Handle PDF files differently than images
+    if (file.type === "application/pdf") {
+      // For PDFs, upload directly without optimization
+      const sanitizedName = sanitizeFileName(file.name);
 
-    // Upload all optimized versions to Supabase
-    const uploadResults = [];
-
-    for (const optimized of optimizedImages) {
       const fileName = `${Date.now()}-${Math.random()
         .toString(36)
-        .substring(2)}-${optimized.name}`;
+        .substring(2)}-${sanitizedName}`;
 
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("image-assets")
-        .upload(fileName, optimized.buffer, {
-          contentType: optimized.contentType,
+        .upload(fileName, buffer, {
+          contentType: file.type,
           cacheControl: "31536000", // 1 year cache
         });
 
       if (error) {
-        throw new Error(
-          `Upload failed for ${optimized.name}: ${error.message}`
-        );
+        throw new Error(`PDF upload failed: ${error.message}`);
       }
 
       // Get public URL
@@ -91,25 +101,75 @@ export async function POST(req: NextRequest) {
       } = supabase.storage.from("image-assets").getPublicUrl(fileName);
 
       uploadResults.push({
-        name: optimized.name,
+        name: file.name,
         url: publicUrl,
-        size: optimized.size,
-        width: optimized.width,
-        height: optimized.height,
-        format: optimized.format,
-        quality: optimized.quality,
+        size: file.size,
+        width: null,
+        height: null,
+        format: "pdf",
+        quality: null,
       });
+    } else {
+      // Handle images with optimization
+      metadata = await sharp(buffer).metadata();
+
+      // Determine optimal formats and sizes
+      const optimizedImages = await createOptimizedImages(
+        buffer,
+        file.name,
+        metadata
+      );
+
+      // Upload all optimized versions to Supabase
+      for (const optimized of optimizedImages) {
+        const sanitizedName = sanitizeFileName(optimized.name);
+
+        const fileName = `${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2)}-${sanitizedName}`;
+
+        const { error } = await supabase.storage
+          .from("image-assets")
+          .upload(fileName, optimized.buffer, {
+            contentType: optimized.contentType,
+            cacheControl: "31536000", // 1 year cache
+          });
+
+        if (error) {
+          throw new Error(
+            `Upload failed for ${optimized.name}: ${error.message}`
+          );
+        }
+
+        // Get public URL
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("image-assets").getPublicUrl(fileName);
+
+        uploadResults.push({
+          name: optimized.name,
+          url: publicUrl,
+          size: optimized.size,
+          width: optimized.width,
+          height: optimized.height,
+          format: optimized.format,
+          quality: optimized.quality,
+        });
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: "Images optimized and uploaded successfully",
+      message:
+        file.type === "application/pdf"
+          ? "PDF uploaded successfully"
+          : "File processed and uploaded successfully",
       original: {
         name: file.name,
         size: file.size,
-        width: metadata.width,
-        height: metadata.height,
-        format: metadata.format,
+        width: file.type === "application/pdf" ? null : metadata?.width,
+        height: file.type === "application/pdf" ? null : metadata?.height,
+        format: file.type === "application/pdf" ? "pdf" : metadata?.format,
       },
       optimized: uploadResults,
     });
@@ -133,7 +193,6 @@ async function createOptimizedImages(
 
   // Original dimensions
   const originalWidth = metadata.width || 0;
-  const originalHeight = metadata.height || 0;
 
   // Define size variants with responsive breakpoints
   const sizeVariants = [
@@ -201,7 +260,7 @@ async function createOptimizedImages(
 }
 
 // GET endpoint to list uploaded images
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
