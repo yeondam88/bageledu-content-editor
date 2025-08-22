@@ -107,6 +107,37 @@ export function MainNav({ isMobile = false }: MainNavProps) {
         )}
         Image Assets
       </Link>
+      <Link
+        href="/shorten"
+        className={cn(
+          "text-sm font-medium transition-colors hover:text-primary flex items-center",
+          pathname === "/shorten"
+            ? "text-primary font-semibold"
+            : "text-muted-foreground",
+          isMobile && "py-2 px-3 rounded-md hover:bg-gray-50 w-full"
+        )}
+      >
+        {isMobile && (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mr-2"
+          >
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            <path d="M8 8h8"></path>
+            <path d="M8 12h8"></path>
+            <path d="M8 16h8"></path>
+          </svg>
+        )}
+        URL Shortener
+      </Link>
     </nav>
   );
 }
