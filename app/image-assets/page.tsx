@@ -27,6 +27,7 @@ import {
   FolderOpen,
   Sparkles,
   Info,
+  Link,
 } from "lucide-react";
 
 interface OptimizedImage {
@@ -69,6 +70,10 @@ export default function ImageAssetsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isDragActive, setIsDragActive] = useState(false);
+  const [shortUrls, setShortUrls] = useState<{ [key: string]: string }>({});
+  const [shorteningStates, setShorteningStates] = useState<{
+    [key: string]: boolean;
+  }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter assets based on search query
@@ -215,6 +220,53 @@ export default function ImageAssetsPage() {
       toast.success("URL copied to clipboard!");
     } catch {
       toast.error("Failed to copy URL");
+    }
+  };
+
+  // Create short URL for an asset
+  const createShortUrl = async (assetUrl: string, fileName: string) => {
+    const key = assetUrl;
+
+    // Check if already shortening
+    if (shorteningStates[key]) return;
+
+    // Check if already has short URL
+    if (shortUrls[key]) {
+      copyToClipboard(shortUrls[key]);
+      return;
+    }
+
+    setShorteningStates((prev) => ({ ...prev, [key]: true }));
+
+    try {
+      const response = await fetch("/api/auto-shorten", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetUrl,
+          fileName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create short URL");
+      }
+
+      // Store the short URL
+      setShortUrls((prev) => ({ ...prev, [key]: data.shortUrl }));
+
+      // Copy to clipboard immediately
+      copyToClipboard(data.shortUrl);
+
+      toast.success("Short URL created and copied!");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to create short URL";
+      toast.error(message);
+    } finally {
+      setShorteningStates((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -735,6 +787,26 @@ export default function ImageAssetsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                onClick={() =>
+                                  createShortUrl(image.url, image.name)
+                                }
+                                disabled={shorteningStates[image.url]}
+                                className="flex-1 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 text-xs h-8"
+                              >
+                                {shorteningStates[image.url] ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : shortUrls[image.url] ? (
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <Link className="h-3 w-3 mr-1" />
+                                )}
+                                {shortUrls[image.url]
+                                  ? "Copy Short"
+                                  : "Short URL"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => window.open(image.url, "_blank")}
                                 className="bg-white hover:bg-gray-100 h-8"
                               >
@@ -1008,6 +1080,26 @@ export default function ImageAssetsPage() {
                             >
                               <Copy className="h-3 w-3 mr-1" />
                               Copy URL
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                createShortUrl(asset.url, asset.name)
+                              }
+                              disabled={shorteningStates[asset.url]}
+                              className="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 text-xs h-9 px-3"
+                            >
+                              {shorteningStates[asset.url] ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : shortUrls[asset.url] ? (
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                              ) : (
+                                <Link className="h-3 w-3 mr-1" />
+                              )}
+                              {shortUrls[asset.url]
+                                ? "Copy Short"
+                                : "Short URL"}
                             </Button>
                             <Button
                               size="sm"

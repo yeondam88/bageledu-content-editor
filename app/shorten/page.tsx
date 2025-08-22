@@ -13,14 +13,12 @@ import {
   Link,
   Copy,
   ExternalLink,
-  BarChart3,
   Calendar,
   Globe,
   Scissors,
   Plus,
   Loader2,
   Eye,
-  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -64,7 +62,7 @@ export default function UrlShortener() {
 
       const data = await response.json();
       setUrls(data.urls || []);
-    } catch (error) {
+    } catch {
       toast.error("Failed to load URLs");
     } finally {
       setFetching(false);
@@ -106,8 +104,10 @@ export default function UrlShortener() {
       setExpiresIn("");
 
       toast.success("URL shortened successfully!");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to shorten URL");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to shorten URL";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -213,13 +213,16 @@ export default function UrlShortener() {
                 <Input
                   id="expires"
                   type="number"
-                  placeholder="30"
+                  placeholder="Leave empty for no expiry"
                   value={expiresIn}
                   onChange={(e) =>
                     setExpiresIn(e.target.value ? parseInt(e.target.value) : "")
                   }
                   className="mt-1"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Leave empty for permanent links (recommended)
+                </p>
               </div>
             </div>
 

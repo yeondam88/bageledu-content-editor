@@ -166,15 +166,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get the current domain from the request
+    const host = req.headers.get("host") || "localhost:3000";
+    const protocol = req.headers.get("x-forwarded-proto") || "http";
+    const baseUrl = `${protocol}://${host}`;
+
     // Return the created short URL
     return NextResponse.json(
       {
         id: data.id,
         originalUrl: data.original_url,
         shortCode: data.short_code,
-        shortUrl: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/s/${
-          data.short_code
-        }`,
+        shortUrl: `${baseUrl}/s/${data.short_code}`,
         title: data.title,
         clicks: data.clicks,
         createdAt: data.created_at,
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Shorten URL error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -230,14 +233,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Get the current domain from the request
+    const host = req.headers.get("host") || "localhost:3000";
+    const protocol = req.headers.get("x-forwarded-proto") || "http";
+    const baseUrl = `${protocol}://${host}`;
+
     // Format response
     const urls = data.map((url) => ({
       id: url.id,
       originalUrl: url.original_url,
       shortCode: url.short_code,
-      shortUrl: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/s/${
-        url.short_code
-      }`,
+      shortUrl: `${baseUrl}/s/${url.short_code}`,
       title: url.title,
       clicks: url.clicks,
       createdAt: url.created_at,
@@ -247,7 +253,7 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ urls });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("List URLs error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
